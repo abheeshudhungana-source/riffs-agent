@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RIFFs - AI Practice & Sketching Partner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 bg-gradient-to-tr from-amber-500 to-indigo-500 rounded-xl flex items-center justify-center font-black text-xl text-black shadow-lg shadow-indigo-500/20">
+        R
+      </div>
+      <div>
+        <h1 class="font-extrabold text-lg tracking-tight flex items-center gap-2">
+          RIFFs
+          <span class="text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-full font-semibold">DAY 0 PROTOTYPE</span>
+        </h1>
+        <p class="text-xs text-slate-400">AI Practice & Sketching Partner for Musicians</p>
+      </div>
+    </div>
+
+    <!-- HUD STATS -->
+    <div class="flex items-center gap-3 mono text-xs">
+      <div class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2">
+        <span class="text-slate-400">KEY:</span>
+        <span id="hud-key" class="font-bold text-amber-400">A Minor</span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2">
+        <span class="text-slate-400">MODE:</span>
+        <span id="hud-mode" class="font-bold text-indigo-400">Dorian</span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2">
+        <span class="text-slate-400">BPM:</span>
+        <span id="hud-bpm" class="font-bold text-emerald-400">110</span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2">
+        <span class="text-slate-400">TAKE:</span>
+        <span id="hud-take" class="font-bold text-purple-400">Take 1</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN STUDIO LAYOUT -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- LEFT COLUMN: CONTROLS & INGRESS (4 COLS) -->
+    <section class="lg:col-span-4 flex flex-col gap-6">
+
+      <!-- STAGE 1: INGRESS & CHORDS -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span> 1. Seed The Band
+          </h2>
+          <span class="text-xs text-slate-400">Musician-First</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Typed Chords or Nashville Numbers</label>
+          <input id="input-chords" type="text" value="Am - F - C - G" placeholder="e.g. Am - F - C - G or 1 - 4 - 5 - 1" 
+                 class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm mono text-amber-300 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
+          <p class="text-[11px] text-slate-400 mt-1">The agent builds the accompaniment around your chords.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Style / Prompt Direction</label>
+          <input id="input-prompt" type="text" value="Funky neo-soul pocket with driving bass" placeholder="e.g. Driving indie rock, half-time jazz shuffle..." 
+                 class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition" />
+        </div>
+
+        <!-- INSTRUMENT SELECTION (1-3 INSTRUMENTS) -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-2">Select Active Instruments (1 to 3)</label>
+          <div class="grid grid-cols-3 gap-2 text-xs">
+            <!-- LOW -->
+            <label class="border border-slate-800 bg-slate-950/50 p-2.5 rounded-xl cursor-pointer hover:border-slate-700 flex flex-col gap-1 items-start">
+              <input type="checkbox" id="inst-drums" checked class="accent-indigo-500 rounded">
+              <span class="font-bold text-slate-200">Drums</span>
+              <span class="text-[10px] text-slate-400">Low/Perc</span>
+            </label>
+            <!-- MID -->
+            <label class="border border-slate-800 bg-slate-950/50 p-2.5 rounded-xl cursor-pointer hover:border-slate-700 flex flex-col gap-1 items-start">
+              <input type="checkbox" id="inst-bass" checked class="accent-indigo-500 rounded">
+              <span class="font-bold text-slate-200">Bass</span>
+              <span class="text-[10px] text-slate-400">Low/Rhythm</span>
+            </label>
+            <!-- HIGH -->
+            <label class="border border-slate-800 bg-slate-950/50 p-2.5 rounded-xl cursor-pointer hover:border-slate-700 flex flex-col gap-1 items-start">
+              <input type="checkbox" id="inst-lead" checked class="accent-indigo-500 rounded">
+              <span class="font-bold text-slate-200">Saxophone</span>
+              <span class="text-[10px] text-slate-400">Mid/Lead</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- HEADLESS VIDEO DUB DROPZONE -->
+        <div class="border border-dashed border-slate-800 rounded-xl p-3.5 bg-slate-950/30 text-center hover:border-slate-700 transition cursor-pointer">
+          <input type="file" id="video-file-input" accept="video/mp4,video/quicktime" class="hidden" />
+          <label for="video-file-input" class="cursor-pointer">
+            <div class="text-xs font-semibold text-slate-300 flex items-center justify-center gap-1.5">
+              <span>📹 Dub Social Video</span>
+              <span class="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">Optional</span>
+            </div>
+            <p id="video-filename" class="text-[11px] text-slate-400 mt-1">Drop raw MP4/MOV (max 50MB) to replace camera audio</p>
+          </label>
+        </div>
+
+        <!-- GENERATE BUTTON -->
+        <button id="btn-generate" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-500/25 transition active:scale-[0.98] flex items-center justify-center gap-2">
+          <span>✨ Generate Riff & Backing Track</span>
+        </button>
+      </div>
+
+      <!-- PRACTICE MODE TOOLS -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 2. Musician Practice Suite
+        </h2>
+
+        <!-- TEMPO & SPEED TRAINER -->
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center text-xs">
+            <span class="font-semibold text-slate-300">Tempo: <span id="val-bpm" class="mono font-bold text-emerald-400">110 BPM</span></span>
+            <label class="flex items-center gap-1.5 cursor-pointer text-slate-400 hover:text-slate-200">
+              <input type="checkbox" id="check-speed-trainer" class="accent-emerald-500">
+              <span class="text-[11px]">Speed Trainer (+3 BPM)</span>
+            </label>
+          </div>
+          <input id="slider-bpm" type="range" min="60" max="200" value="110" class="w-full accent-emerald-500 cursor-pointer" />
+        </div>
+
+        <!-- TRANSPORT TOGGLES -->
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button id="btn-metronome" class="py-2 px-3 rounded-xl border border-slate-700 bg-slate-950 font-semibold text-slate-300 flex items-center justify-center gap-1.5 hover:border-slate-600 transition">
+            <span>⏱️ Metronome: <span id="status-metronome" class="text-emerald-400 font-bold">ON</span></span>
+          </button>
+          <button id="btn-count-in" class="py-2 px-3 rounded-xl border border-slate-700 bg-slate-950 font-semibold text-slate-300 flex items-center justify-center gap-1.5 hover:border-slate-600 transition">
+            <span>🥁 Count-In: <span class="text-indigo-400 font-bold">4 Beats</span></span>
+          </button>
+        </div>
+
+        <!-- MUTE YOUR PART -->
+        <div>
+          <span class="block text-xs font-semibold text-slate-300 mb-2">Mute Your Instrument to Play Along:</span>
+          <div class="flex gap-2">
+            <button class="track-mute-btn flex-1 py-1.5 text-xs font-semibold rounded-lg border border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200" data-track="lead">
+              Mute Sax
+            </button>
+            <button class="track-mute-btn flex-1 py-1.5 text-xs font-semibold rounded-lg border border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200" data-track="bass">
+              Mute Bass
+            </button>
+            <button class="track-mute-btn flex-1 py-1.5 text-xs font-semibold rounded-lg border border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200" data-track="drums">
+              Mute Drums
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- RIGHT COLUMN: PLAYBACK, NOTATION, TAKES, EXPORTS (8 COLS) -->
+    <section class="lg:col-span-8 flex flex-col gap-6">
+
+      <!-- PLAYBACK & TRANSPORT BAR -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <button id="btn-play-pause" class="w-12 h-12 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xl rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 active:scale-95 transition">
+              ▶
+            </button>
+            <div>
+              <div class="font-bold text-sm text-slate-100 flex items-center gap-2">
+                <span>Neo-Soul Groove</span>
+                <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full mono">8 BARS (4/4)</span>
+              </div>
+              <div class="text-xs text-slate-400 mono mt-0.5">Bar: <span id="current-bar" class="text-emerald-400 font-bold">1</span> / 8 &bull; Beat: <span id="current-beat" class="text-indigo-400 font-bold">1</span></div>
+            </div>
+          </div>
+
+          <!-- PART LOCKS & TAKES -->
+          <div class="flex items-center gap-2">
+            <div class="flex bg-slate-950 border border-slate-800 rounded-xl p-1 text-xs mono">
+              <button class="take-btn px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-bold" data-take="1">Take 1</button>
+              <button class="take-btn px-2.5 py-1 rounded-lg text-slate-400 hover:text-slate-200" data-take="2">Take 2</button>
+              <button class="take-btn px-2.5 py-1 rounded-lg text-slate-400 hover:text-slate-200" data-take="3">Take 3</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- AUDIO PROGRESS / BEAT GRID BAR -->
+        <div class="h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5 flex gap-1">
+          <div class="bar-step flex-1 h-full rounded-sm bg-emerald-500 transition-all"></div>
+          <div class="bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all"></div>
+          <div class="bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all"></div>
+          <div class="bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all"></div>
+          <div class="bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all"></div>
+          <div class="bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all"></div>
+          <div class="bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all"></div>
+          <div class="bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all"></div>
+        </div>
+
+        <!-- TRACK LANES & PART-LOCK CONTROLS -->
+        <div class="flex flex-col gap-2 pt-2">
+          <!-- LANE 1 -->
+          <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 px-3.5 py-2 rounded-xl text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span class="font-semibold text-slate-200">Saxophone (Lead)</span>
+            </div>
+            <button class="lock-part-btn text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 font-mono" data-lane="lead">
+              <span>🔓 Unlock</span>
+            </button>
+          </div>
+          <!-- LANE 2 -->
+          <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 px-3.5 py-2 rounded-xl text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+              <span class="font-semibold text-slate-200">Bass Guitar (Rhythm)</span>
+            </div>
+            <button class="lock-part-btn text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-mono font-bold" data-lane="bass">
+              <span>🔒 Locked</span>
+            </button>
+          </div>
+          <!-- LANE 3 -->
+          <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 px-3.5 py-2 rounded-xl text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span class="font-semibold text-slate-200">Acoustic Drums (Percussion)</span>
+            </div>
+            <button class="lock-part-btn text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 font-mono" data-lane="drums">
+              <span>🔓 Unlock</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTATION & CHART DASHBOARD (TRIPLE VIEW) -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400">Score & Chart View</h3>
+            <span class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">Exact Ground Truth</span>
+          </div>
+          <!-- VIEW SELECTOR TABS -->
+          <div class="flex bg-slate-950 border border-slate-800 rounded-xl p-1 text-xs mono">
+            <button class="chart-tab-btn px-3 py-1 rounded-lg bg-amber-500 text-black font-bold" data-view="nashville">Nashville / Chords</button>
+            <button class="chart-tab-btn px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200" data-view="tab">Guitar Tab</button>
+            <button class="chart-tab-btn px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200" data-view="sheet">Staff Sheet</button>
+          </div>
+        </div>
+
+        <!-- VIEW CONTAINER -->
+        <div id="chart-display" class="bg-slate-950 border border-slate-800 rounded-xl p-6 min-h-[180px] flex items-center justify-center font-mono">
+          <!-- DEFAULT: NASHVILLE CHART -->
+          <div id="view-nashville" class="w-full">
+            <div class="text-center text-xs text-slate-400 mb-4 font-sans font-semibold">Key of A Minor (Nashville Numbers: 1m - b6 - b3 - b7)</div>
+            <div class="grid grid-cols-4 gap-4 text-center">
+              <div class="border border-slate-800 bg-slate-900/50 p-4 rounded-xl">
+                <div class="text-xs text-slate-400">BAR 1-2</div>
+                <div class="text-3xl font-black text-amber-400 mt-1">1m</div>
+                <div class="text-xs text-slate-400 mt-1">Am7</div>
+              </div>
+              <div class="border border-slate-800 bg-slate-900/50 p-4 rounded-xl">
+                <div class="text-xs text-slate-400">BAR 3-4</div>
+                <div class="text-3xl font-black text-amber-400 mt-1">b6</div>
+                <div class="text-xs text-slate-400 mt-1">Fmaj7</div>
+              </div>
+              <div class="border border-slate-800 bg-slate-900/50 p-4 rounded-xl">
+                <div class="text-xs text-slate-400">BAR 5-6</div>
+                <div class="text-3xl font-black text-amber-400 mt-1">b3</div>
+                <div class="text-xs text-slate-400 mt-1">Cmaj7</div>
+              </div>
+              <div class="border border-slate-800 bg-slate-900/50 p-4 rounded-xl">
+                <div class="text-xs text-slate-400">BAR 7-8</div>
+                <div class="text-3xl font-black text-amber-400 mt-1">b7</div>
+                <div class="text-xs text-slate-400 mt-1">G7 (Turn)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- GUITAR TAB (HIDDEN INITIALLY) -->
+          <div id="view-tab" class="hidden w-full text-slate-300 text-xs leading-relaxed overflow-x-auto whitespace-pre">
+e|-----------------------------------------------------------------|
+B|--8h10-10--8h10-10---8h10-10--8-----------------------------------|
+G|---------------------------------9-7-5h7-5------------------------|
+D|-------------------------------------------7-5--------------------|
+A|-----------------------------------------------7-5-3h5-3----------|
+E|---------------------------------------------------------5-3-0----|
+          </div>
+
+          <!-- STAFF SHEET (HIDDEN INITIALLY) -->
+          <div id="view-sheet" class="hidden text-center text-slate-400 text-xs">
+            🎼 Standard 5-line notation rendered with MusicXML engine (Treble & Bass clef).
+          </div>
+        </div>
+      </div>
+
+      <!-- EXPORT SUITE -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-xl flex items-center justify-between">
+        <div>
+          <h4 class="font-bold text-sm text-slate-200">Export & DAW Handoff</h4>
+          <p class="text-xs text-slate-400">DAW-standard stem names + Provable License Certificate</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl transition flex items-center gap-1.5 border border-slate-700">
+            <span>📥 Download WAV Stems (.zip)</span>
+          </button>
+          <button class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-emerald-600/20">
+            <span>🎬 Export Dubbed MP4</span>
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- SIMPLE PROTOTYPE INTERACTIVITY SCRIPT -->
+  <script>
+    // Web Audio Mock Prototype
+    let isPlaying = false;
+    let bpm = 110;
+    let bar = 1;
+    let timer = null;
+
+    const playBtn = document.getElementById('btn-play-pause');
+    const bpmSlider = document.getElementById('slider-bpm');
+    const bpmVal = document.getElementById('val-bpm');
+    const hudBpm = document.getElementById('hud-bpm');
+    const currentBarEl = document.getElementById('current-bar');
+    const barSteps = document.querySelectorAll('.bar-step');
+
+    bpmSlider.addEventListener('input', (e) => {
+      bpm = e.target.value;
+      bpmVal.innerText = bpm + ' BPM';
+      hudBpm.innerText = bpm;
+    });
+
+    playBtn.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      playBtn.innerText = isPlaying ? '⏸' : '▶';
+      if (isPlaying) {
+        startLoop();
+      } else {
+        clearInterval(timer);
+      }
+    });
+
+    function startLoop() {
+      clearInterval(timer);
+      const intervalMs = (60 / bpm) * 1000 * 4; // 4 beats per bar
+      timer = setInterval(() => {
+        bar = (bar % 8) + 1;
+        currentBarEl.innerText = bar;
+        barSteps.forEach((step, idx) => {
+          step.className = idx === (bar - 1) 
+            ? 'bar-step flex-1 h-full rounded-sm bg-emerald-500 transition-all' 
+            : 'bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all';
+        });
+
+        // Speed Trainer Check
+        const speedTrainer = document.getElementById('check-speed-trainer');
+        if (speedTrainer && speedTrainer.checked && bar === 1) {
+          bpm = Math.min(220, parseInt(bpm) + 3);
+          bpmSlider.value = bpm;
+          bpmVal.innerText = bpm + ' BPM';
+          hudBpm.innerText = bpm;
+          startLoop();
+        }
+      }, intervalMs);
+    }
+
+    // Chart Tabs Switching
+    document.querySelectorAll('.chart-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.chart-tab-btn').forEach(b => {
+          b.className = 'chart-tab-btn px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200';
+        });
+        e.target.className = 'chart-tab-btn px-3 py-1 rounded-lg bg-amber-500 text-black font-bold';
+
+        const view = e.target.dataset.view;
+        document.getElementById('view-nashville').classList.toggle('hidden', view !== 'nashville');
+        document.getElementById('view-tab').classList.toggle('hidden', view !== 'tab');
+        document.getElementById('view-sheet').classList.toggle('hidden', view !== 'sheet');
+      });
+    });
+
+    // Part Lock Toggles
+    document.querySelectorAll('.lock-part-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const isLocked = btn.innerText.includes('Locked');
+        if (isLocked) {
+          btn.innerHTML = '<span>🔓 Unlock</span>';
+          btn.className = 'lock-part-btn text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 font-mono';
+        } else {
+          btn.innerHTML = '<span>🔒 Locked</span>';
+          btn.className = 'lock-part-btn text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-mono font-bold';
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>
