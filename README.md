@@ -68,3 +68,7 @@ If configured correctly, Claude will return a live confirmation greeting.
 
 ## 📜 Complete Documentation
 For full technical specifications, user personas, threat models, and eval cards, read the [PRD](docs/PRD.md).
+
+## Chord-First Backend
+
+The FastAPI app includes chord parsing, symbolic score generation, and symbolic export routes. See the [backend setup and API guide](docs/BACKEND.md) and the [PRD implementation map](docs/BACKEND_PRD_MAP.md). The `render_riff_to_audio` route currently exports MIDI, MusicXML, and chord chart JSON; WAV rendering and license certificates depend on selecting an audio engine and licensed sample source.

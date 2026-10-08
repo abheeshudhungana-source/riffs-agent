@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
+from riffs_api.routes import router as riff_routes
 
 # Import the RIFFs agent harness
 try:
@@ -18,6 +19,8 @@ app = FastAPI(
     description="Autonomous AI Practice & Sketching Partner for Musicians",
     version="0.1.0"
 )
+
+app.include_router(riff_routes)
 
 # Root route serves the interactive Day 0 prototype
 @app.get("/", response_class=HTMLResponse)

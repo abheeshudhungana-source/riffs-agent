@@ -44,3 +44,6 @@ outputs/
 *.mp3
 *.mp4
 *.mid
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
