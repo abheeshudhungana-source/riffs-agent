@@ -74,17 +74,12 @@
           <label class="block text-xs font-semibold text-slate-300 mb-1.5">Typed Chords or Nashville Numbers</label>
           <input id="input-chords" type="text" value="Am - F - C - G" placeholder="e.g. Am - F - C - G or 1 - 4 - 5 - 1" 
                  class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm mono text-amber-300 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
+          <p id="chords-error" role="alert" class="hidden text-[11px] text-rose-400 mt-1"></p>
           <p class="text-[11px] text-slate-400 mt-1">The agent builds the accompaniment around your chords.</p>
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Style / Prompt Direction</label>
-          <input id="input-prompt" type="text" value="Funky neo-soul pocket with driving bass" placeholder="e.g. Driving indie rock, half-time jazz shuffle..." 
-                 class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition" />
-        </div>
-
         <!-- GENERATE BUTTON -->
-        <button id="btn-generate" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-500/25 transition active:scale-[0.98] flex items-center justify-center gap-2">
+        <button id="btn-open-generate" type="button" class="disabled:opacity-40 disabled:cursor-not-allowed w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-500/25 transition active:scale-[0.98] flex items-center justify-center gap-2">
           <span>✨ Generate Riff & Backing Track</span>
         </button>
       </div>
@@ -135,6 +130,7 @@
               </select>
             </div>
           </div>
+          <p id="ensemble-error" role="alert" class="hidden text-[11px] text-rose-400 mt-1.5"></p>
         </div>
 
         <!-- TRANSPORT TOGGLES -->
@@ -151,18 +147,6 @@
           <button id="btn-count-in" class="py-2 px-3 rounded-xl border border-slate-700 bg-slate-950 font-semibold text-slate-300 flex items-center justify-center gap-1.5 hover:border-slate-600 transition">
             <span>🥁 Count-In: <span class="text-indigo-400 font-bold">4 Beats</span></span>
           </button>
-        </div>
-
-        <!-- SPEED TRAINER TOGGLE -->
-        <div class="flex items-center justify-between bg-slate-950/50 border border-slate-800 p-2.5 rounded-xl text-xs">
-          <div>
-            <span class="font-bold text-slate-200">Practice Auto-Ramp</span>
-            <p class="text-[11px] text-slate-400">+3 BPM after each clean 8-bar loop</p>
-          </div>
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="check-speed-trainer" class="accent-emerald-500 w-4 h-4 rounded">
-            <span class="text-xs font-semibold text-emerald-400">Speed Trainer</span>
-          </label>
         </div>
 
         <!-- MUTE YOUR PART WITH LED SWITCHES -->
@@ -253,6 +237,18 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- SPEED TRAINER TOGGLE -->
+        <div class="flex items-center justify-between bg-slate-950/50 border border-slate-800 p-2.5 rounded-xl text-xs">
+          <div>
+            <span class="font-bold text-slate-200">Practice Auto-Ramp</span>
+            <p class="text-[11px] text-slate-400">+3 BPM after each clean 8-bar loop</p>
+          </div>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="check-speed-trainer" class="accent-emerald-500 w-4 h-4 rounded">
+            <span class="text-xs font-semibold text-emerald-400">Speed Trainer</span>
+          </label>
         </div>
 
         <!-- AUDIO PROGRESS / BEAT GRID BAR -->
@@ -383,6 +379,55 @@ E|---------------------------------------------------------5-3-0----|
 
   </main>
 
+  <!-- GENERATE MODAL (Day 2) -->
+  <div id="generate-modal" class="fixed inset-0 z-[60] hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div id="modal-backdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+    <div class="absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg rounded-t-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl md:inset-y-0 md:my-auto md:h-fit md:rounded-2xl">
+      <header class="flex items-center justify-between">
+        <h3 id="modal-title" class="text-lg font-semibold text-slate-100">Shape the Groove</h3>
+        <button id="btn-close-modal" type="button" aria-label="Close" class="rounded p-1 text-slate-400 hover:text-slate-100">✕</button>
+      </header>
+
+      <label for="input-style" class="mt-5 block text-xs text-slate-500">Style / Vibe</label>
+      <textarea id="input-style" rows="2" maxlength="200" placeholder="Funky neo-soul pocket with driving bass"
+                class="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none"></textarea>
+
+      <fieldset class="mt-4">
+        <legend class="text-xs text-slate-500">Genre &amp; Groove (max 2)</legend>
+        <div id="genre-chips" class="mt-2 flex flex-wrap gap-2">
+          <button type="button" data-genre="Neo-Soul" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-emerald-400 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-300">Neo-Soul</button>
+          <button type="button" data-genre="Halftime Shuffle" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-emerald-400 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-300">Halftime Shuffle</button>
+          <button type="button" data-genre="Indie Rock" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-emerald-400 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-300">Indie Rock</button>
+          <button type="button" data-genre="Lo-Fi" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-emerald-400 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-300">Lo-Fi</button>
+          <button type="button" data-genre="Walking Bass" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-emerald-400 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-300">Walking Bass</button>
+        </div>
+      </fieldset>
+
+      <div class="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <label for="select-key" class="text-xs text-slate-500">Key</label>
+          <select id="select-key" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100">
+            <option>C</option><option>Cm</option><option>D</option><option>Dm</option>
+            <option>E</option><option>Em</option><option>F</option><option>Fm</option>
+            <option>G</option><option>Gm</option><option selected>Am</option><option>A</option>
+            <option>Bm</option><option>B</option>
+          </select>
+        </div>
+        <div>
+          <label for="input-bpm" class="text-xs text-slate-500">Tempo (BPM)</label>
+          <input id="input-bpm" type="number" min="60" max="200" value="110" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100" />
+        </div>
+      </div>
+
+      <p id="modal-error" role="alert" class="mt-3 hidden text-xs text-rose-400"></p>
+
+      <footer class="mt-6 flex justify-end gap-3">
+        <button id="btn-cancel-modal" type="button" class="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-100">Cancel</button>
+        <button id="btn-confirm-synthesize" type="button" class="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-40">Confirm &amp; Synthesize</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- SIMPLE PROTOTYPE INTERACTIVITY SCRIPT -->
   <script>
     // Web Audio Mock Prototype
@@ -426,14 +471,11 @@ E|---------------------------------------------------------5-3-0----|
             : 'bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all';
         });
 
-        // Speed Trainer Check
-        const speedTrainer = document.getElementById('check-speed-trainer');
-        if (speedTrainer && speedTrainer.checked && bar === 1) {
-          bpm = Math.min(220, parseInt(bpm) + 3);
-          bpmSlider.value = bpm;
-          bpmVal.innerText = bpm + ' BPM';
-          hudBpm.innerText = bpm;
-          startLoop();
+        // Loop completed: state machine handles +3 BPM speed-trainer ramp (cap 200)
+        if (bar === 1) {
+          const before = state.bpm;
+          dispatch({ type: 'LOOP_COMPLETE' });
+          if (state.bpm !== before) startLoop();
         }
       }, intervalMs);
     }
@@ -513,6 +555,359 @@ E|---------------------------------------------------------5-3-0----|
         }
       });
     });
+
+    // =====================================================================
+    // DAY 2: STATE MACHINE, VALIDATION & GENERATE MODAL
+    // =====================================================================
+    const MIN_BPM = 60, MAX_BPM = 200, SPEED_STEP = 3, MAX_TAKES = 5;
+    const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+    const ALLOWED_VIDEO_MIME = ['video/mp4', 'video/quicktime'];
+    const clampBpm = (n) => Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(Number(n) || 110)));
+
+    const initialState = {
+      phase: 'idle', modalOpen: false, currentTake: 1, takes: [],
+      lockedTracks: ['bass'], bpm: 110, baseBpm: 110,
+      speedTrainerActive: false, loopCount: 0, metronomeActive: true,
+      muteTiers: { low: false, mid: false, high: false },
+      ensemble: { low: 'bass_guitar', mid: 'rhythm_guitar', high: 'cymbals' },
+      error: null,
+    };
+
+    function reducer(s, a) {
+      switch (a.type) {
+        case 'OPEN_MODAL':
+          return s.phase === 'generating' ? s : { ...s, modalOpen: true, phase: 'modalOpen' };
+        case 'CLOSE_MODAL':
+          return { ...s, modalOpen: false, phase: s.takes.length ? 'ready' : 'idle' };
+        case 'GENERATE_START':
+          return { ...s, phase: 'generating', error: null };
+        case 'GENERATE_SUCCESS': {
+          const id = (s.takes.length ? s.takes[s.takes.length - 1].id : 0) + 1;
+          const takes = [...s.takes, { id, payload: a.data }].slice(-MAX_TAKES);
+          return { ...s, takes, currentTake: id, modalOpen: false, phase: 'ready',
+                   bpm: clampBpm(a.data.bpm), baseBpm: clampBpm(a.data.bpm), loopCount: 0 };
+        }
+        case 'GENERATE_FAIL':
+          return { ...s, phase: 'error', error: a.error };
+        case 'SELECT_TAKE':
+          return s.takes.some(t => t.id === a.take) ? { ...s, currentTake: a.take, loopCount: 0 } : s;
+        case 'TOGGLE_LOCK':
+          return { ...s, lockedTracks: s.lockedTracks.includes(a.lane)
+            ? s.lockedTracks.filter(l => l !== a.lane) : [...s.lockedTracks, a.lane] };
+        case 'SET_BPM':
+          return { ...s, bpm: clampBpm(a.bpm), baseBpm: clampBpm(a.bpm), loopCount: 0 };
+        case 'TOGGLE_SPEED_TRAINER':
+          return { ...s, speedTrainerActive: !s.speedTrainerActive, baseBpm: s.bpm, loopCount: 0 };
+        case 'LOOP_COMPLETE':
+          return s.speedTrainerActive
+            ? { ...s, loopCount: s.loopCount + 1, bpm: clampBpm(s.bpm + SPEED_STEP) }
+            : { ...s, loopCount: s.loopCount + 1 };
+        case 'TOGGLE_METRONOME':
+          return { ...s, metronomeActive: !s.metronomeActive };
+        case 'TOGGLE_MUTE':
+          return { ...s, muteTiers: { ...s.muteTiers, [a.tier]: !s.muteTiers[a.tier] } };
+        case 'SET_ENSEMBLE':
+          return { ...s, ensemble: { ...s.ensemble, [a.tier]: a.instrument === 'none' ? null : a.instrument } };
+        case 'PLAY':
+          return { ...s, phase: 'playing' };
+        case 'PAUSE':
+          return s.phase === 'playing' ? { ...s, phase: 'ready' } : s;
+        case 'CLEAR_ERROR':
+          return { ...s, error: null, phase: s.modalOpen ? 'modalOpen' : s.takes.length ? 'ready' : 'idle' };
+        default:
+          return s;
+      }
+    }
+
+    let state = { ...initialState };
+    function dispatch(action) { state = reducer(state, action); render(); }
+
+    const activeInstruments = (s) => Object.values(s.ensemble).filter(Boolean);
+    const audibleTiers = (s) => ['low', 'mid', 'high'].filter(t => s.ensemble[t] && !s.muteTiers[t]);
+    const canGenerate = (s) => s.phase !== 'generating' && activeInstruments(s).length >= 1 && activeInstruments(s).length <= 3;
+
+    // ---------- Validators (same error codes as backend) ----------
+    const CHORD_RE = /^[A-G][#b]?(m|maj|min|dim|aug|sus[24]?|add\d+|\d+)*(\/[A-G][#b]?)?$/;
+    const NASH_RE = /^[b#]?(\d+)(m|maj|min|dim|aug|sus[24]?|add\d+|\d+)*$/;
+
+    function validateChords(raw) {
+      const text = (raw || '').trim();
+      if (!text) return { ok: false, code: 'CHORD_SYNTAX', message: 'Enter at least one chord.' };
+      const tokens = text.split(/[\s,|\-–—]+/).filter(Boolean);
+      if (tokens.length > 16) return { ok: false, code: 'CHORD_SYNTAX', message: 'Max 16 chords per loop.' };
+      const isNash = tokens.map(t => /^[b#]?\d/.test(t));
+      if (isNash.some(Boolean) && !isNash.every(Boolean)) {
+        return { ok: false, code: 'CHORD_SYNTAX', message: "Don't mix chord names and Nashville numbers." };
+      }
+      for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (isNash[i]) {
+          const m = t.match(/^[b#]?(\d)/);
+          if (!m || +m[1] < 1 || +m[1] > 7) {
+            return { ok: false, code: 'NASHVILLE_RANGE', message: `Nashville number must be 1–7 (found \`${t}\`).` };
+          }
+          if (!NASH_RE.test(t)) return { ok: false, code: 'CHORD_SYNTAX', message: `Unrecognized chord: \`${t}\` (position ${i + 1}).` };
+        } else if (!CHORD_RE.test(t)) {
+          return { ok: false, code: 'CHORD_SYNTAX', message: `Unrecognized chord: \`${t}\` (position ${i + 1}).` };
+        }
+      }
+      return { ok: true, tokens, nashville: isNash.every(Boolean) };
+    }
+
+    function validateVideo(file) {
+      if (!file) return { ok: true };
+      if (file.size > MAX_VIDEO_BYTES) {
+        return { ok: false, code: 'VIDEO_SIZE', message: `File is ${(file.size / 1048576).toFixed(1)} MB. Limit is 50 MB.` };
+      }
+      if (!ALLOWED_VIDEO_MIME.includes(file.type)) {
+        return { ok: false, code: 'VIDEO_CODEC', message: 'Unsupported format. Use MP4 (H.264) or MOV.' };
+      }
+      return { ok: true };
+    }
+    window.validateVideo = validateVideo; // used by the upcoming Dubbing & Editing workspace
+
+    // ---------- DOM refs ----------
+    const $ = (id) => document.getElementById(id);
+    const chordsInput = $('input-chords'), chordsError = $('chords-error');
+    const btnOpen = $('btn-open-generate');
+    const modal = $('generate-modal'), modalError = $('modal-error');
+    const styleInput = $('input-style'), keySelect = $('select-key'), bpmInput = $('input-bpm');
+    const btnConfirm = $('btn-confirm-synthesize');
+    const ensembleError = $('ensemble-error');
+    let selectedGenres = [];
+
+    function showInline(el, input, msg) {
+      el.textContent = msg || '';
+      el.classList.toggle('hidden', !msg);
+      if (input) input.setAttribute('aria-invalid', msg ? 'true' : 'false');
+    }
+
+    // ---------- Render ----------
+    function render() {
+      modal.classList.toggle('hidden', !state.modalOpen);
+      document.body.classList.toggle('overflow-hidden', state.modalOpen);
+
+      const generating = state.phase === 'generating';
+      btnConfirm.disabled = generating;
+      btnConfirm.textContent = generating ? '⏳ Synthesizing…' : 'Confirm & Synthesize';
+
+      const n = activeInstruments(state).length;
+      btnOpen.disabled = !canGenerate(state);
+      let hint = '';
+      if (n === 0) hint = 'Select at least 1 instrument.';
+      else if (n > 3) hint = 'Maximum 3 instruments (1 per tier).';
+      else if (audibleTiers(state).length === 0) hint = 'All parts muted. You hear only the metronome.';
+      ensembleError.textContent = hint;
+      ensembleError.classList.toggle('hidden', !hint);
+      ['low', 'mid', 'high'].forEach(t => {
+        $('select-inst-' + t).classList.toggle('border-rose-500', n === 0);
+      });
+
+      hudBpm.innerText = state.bpm;
+      bpmVal.innerText = state.bpm + ' BPM';
+      bpmSlider.value = state.bpm;
+      bpm = state.bpm;
+      $('hud-take').innerText = 'Take ' + state.currentTake;
+      document.querySelectorAll('.take-btn').forEach(b => {
+        const id = +b.dataset.take;
+        const exists = state.takes.some(t => t.id === id) || (!state.takes.length && id === 1);
+        b.disabled = !exists;
+        b.classList.toggle('opacity-30', !exists);
+        ['bg-indigo-600', 'text-white', 'font-bold'].forEach(c => b.classList.toggle(c, id === state.currentTake));
+        ['text-slate-400', 'hover:text-slate-200'].forEach(c => b.classList.toggle(c, id !== state.currentTake));
+      });
+
+      if (state.error && state.modalOpen) {
+        modalError.textContent = state.error.message;
+        modalError.classList.remove('hidden');
+      } else {
+        modalError.classList.add('hidden');
+      }
+
+      // Dynamic Chart & Tab rendering for Day 1
+      const activeTake = state.takes.find(t => t.id === state.currentTake);
+      if (activeTake && activeTake.payload) {
+        const payload = activeTake.payload;
+        if (payload.tab_score) {
+          $('view-tab').textContent = payload.tab_score;
+        }
+        if (payload.nashville_chart && payload.nashville_chart.length) {
+          const chords = payload.chords || [];
+          let cardsHtml = '';
+          payload.nashville_chart.forEach((num, idx) => {
+            const chordName = chords[idx] || '';
+            const barNum = `BAR ${idx * 2 + 1}-${idx * 2 + 2}`;
+            cardsHtml += `
+              <div class="border border-slate-800 bg-slate-900/50 p-4 rounded-xl">
+                <div class="text-xs text-slate-400">${barNum}</div>
+                <div class="text-3xl font-black text-amber-400 mt-1">${num}</div>
+                <div class="text-xs text-slate-400 mt-1">${chordName}</div>
+              </div>`;
+          });
+          $('view-nashville').innerHTML = `
+            <div class="text-center text-xs text-slate-400 mb-4 font-sans font-semibold">Key of ${payload.key} (Nashville Numbers: ${payload.nashville_chart.join(' - ')})</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">${cardsHtml}</div>
+          `;
+        }
+      }
+    }
+
+    // ---------- Wire existing controls into the state machine ----------
+    ['low', 'mid', 'high'].forEach(t => {
+      $('select-inst-' + t).addEventListener('change', (e) =>
+        dispatch({ type: 'SET_ENSEMBLE', tier: t, instrument: e.target.value }));
+    });
+    bpmSlider.addEventListener('input', (e) => dispatch({ type: 'SET_BPM', bpm: e.target.value }));
+    $('check-speed-trainer').addEventListener('change', () => dispatch({ type: 'TOGGLE_SPEED_TRAINER' }));
+    metronomeBtn.addEventListener('click', () => dispatch({ type: 'TOGGLE_METRONOME' }));
+    document.querySelectorAll('.track-mute-btn').forEach(b =>
+      b.addEventListener('click', () => dispatch({ type: 'TOGGLE_MUTE', tier: b.dataset.track })));
+    document.querySelectorAll('.lock-part-btn').forEach(b =>
+      b.addEventListener('click', () => dispatch({ type: 'TOGGLE_LOCK', lane: b.dataset.lane })));
+    document.querySelectorAll('.take-btn').forEach(b =>
+      b.addEventListener('click', () => dispatch({ type: 'SELECT_TAKE', take: +b.dataset.take })));
+    playBtn.addEventListener('click', () => dispatch({ type: isPlaying ? 'PLAY' : 'PAUSE' }));
+
+    // ---------- Chords input ----------
+    chordsInput.addEventListener('input', () => showInline(chordsError, chordsInput, ''));
+
+    // ---------- Open / close modal ----------
+    let lastFocus = null;
+    function openModal() {
+      const v = validateChords(chordsInput.value);
+      if (!v.ok) { showInline(chordsError, chordsInput, v.message); chordsInput.focus(); return; }
+      showInline(chordsError, chordsInput, '');
+      lastFocus = document.activeElement;
+      keySelect.value = guessKey(chordsInput.value) || keySelect.value;
+      bpmInput.value = state.bpm;
+      dispatch({ type: 'OPEN_MODAL' });
+      styleInput.focus();
+    }
+    function closeModal() {
+      dispatch({ type: 'CLOSE_MODAL' });
+      if (lastFocus) lastFocus.focus();
+    }
+    function guessKey(raw) {
+      const first = (raw || '').trim().split(/[\s,|\-–—]+/)[0] || '';
+      const m = first.match(/^([A-G][#b]?)(m(?!aj))?/);
+      const k = m ? m[1] + (m[2] ? 'm' : '') : '';
+      return [...keySelect.options].some(o => o.value === k) ? k : '';
+    }
+
+    btnOpen.addEventListener('click', openModal);
+    $('btn-close-modal').addEventListener('click', closeModal);
+    $('btn-cancel-modal').addEventListener('click', closeModal);
+    $('modal-backdrop').addEventListener('click', closeModal);
+
+    document.addEventListener('keydown', (e) => {
+      if (!state.modalOpen) return;
+      if (e.key === 'Escape') { closeModal(); return; }
+      if (e.key === 'Tab') { // focus trap
+        const f = [...modal.querySelectorAll('button, input, select, textarea')].filter(el => !el.disabled && el.offsetParent !== null);
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    });
+
+    // ---------- Genre chips (max 2) ----------
+    $('genre-chips').addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-genre]');
+      if (!chip) return;
+      const g = chip.dataset.genre;
+      const on = chip.getAttribute('aria-pressed') === 'true';
+      if (on) {
+        selectedGenres = selectedGenres.filter(x => x !== g);
+        chip.setAttribute('aria-pressed', 'false');
+        modalError.classList.add('hidden');
+      } else if (selectedGenres.length >= 2) {
+        modalError.textContent = 'Pick up to 2 genre tags.';
+        modalError.classList.remove('hidden');
+        return;
+      } else {
+        selectedGenres.push(g);
+        chip.setAttribute('aria-pressed', 'true');
+      }
+    });
+
+    // ---------- Confirm & Synthesize ----------
+    bpmInput.addEventListener('blur', () => { bpmInput.value = clampBpm(bpmInput.value); });
+
+    btnConfirm.addEventListener('click', async () => {
+      const chords = validateChords(chordsInput.value);
+      if (!chords.ok) { dispatch({ type: 'GENERATE_FAIL', error: chords }); return; }
+      const rawBpm = Number(bpmInput.value);
+      if (!(rawBpm >= MIN_BPM && rawBpm <= MAX_BPM)) {
+        dispatch({ type: 'GENERATE_FAIL', error: { code: 'BPM_RANGE', message: 'BPM must be 60–200.' } });
+        return;
+      }
+      const instruments = activeInstruments(state);
+      if (instruments.length < 1 || instruments.length > 3) {
+        dispatch({ type: 'GENERATE_FAIL', error: { code: 'INSTRUMENT_COUNT', message: 'Select 1 to 3 instruments.' } });
+        return;
+      }
+
+      const promptText = [styleInput.value.trim(), ...selectedGenres].filter(Boolean).join(' | ')
+        || 'Funky neo-soul pocket with driving bass';
+      const payload = {
+        prompt: promptText,
+        key: keySelect.value,
+        bpm: rawBpm,
+        chords: chordsInput.value.trim(),
+        instruments,
+        locked_parts: state.lockedTracks,
+      };
+
+      dispatch({ type: 'GENERATE_START' });
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const code = res.status >= 500 ? 'SERVER' : 'CHORD_SYNTAX';
+          let msg = "Couldn't reach the band. Try again.";
+          try { const j = await res.json(); if (j && j.detail && typeof j.detail === 'string') msg = j.detail; } catch (_) {}
+          dispatch({ type: 'GENERATE_FAIL', error: { code, message: msg } });
+          return;
+        }
+        let json = {};
+        try { json = await res.json(); } catch (_) {}
+        const d = (json && json.data) || {};
+        dispatch({ type: 'GENERATE_SUCCESS', data: {
+          key: d.key || payload.key,
+          bpm: d.bpm || payload.bpm,
+          chords: d.chords || (payload.chords ? payload.chords.split(/[\s,|\-–—]+/).filter(Boolean) : []),
+          nashville_chart: d.nashville_chart || [],
+          tab_score: d.tab_score || '',
+          stems: d.stems || [],
+          license_certificate: d.license_certificate || null,
+        }});
+        $('hud-key').innerText = (d.key || payload.key);
+      } catch (_) {
+        dispatch({ type: 'GENERATE_FAIL', error: { code: 'NETWORK', message: "Couldn't reach the band. Try again." } });
+      }
+    });
+
+    // Save MP3 Download Handler
+    $('btn-save-mp3').addEventListener('click', () => {
+      const activeTake = state.takes.find(t => t.id === state.currentTake);
+      const activeKey = activeTake ? activeTake.payload.key : 'Am';
+      const filename = `riff_${activeKey}_${state.bpm}bpm.mp3`;
+      const blob = new Blob(["RIFFs 320kbps Multisampled Audio Stream"], { type: "audio/mpeg" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    render();
   </script>
 
 </body>

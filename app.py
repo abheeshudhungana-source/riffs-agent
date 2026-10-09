@@ -1,9 +1,9 @@
 import os
 from pathlib import Path
+from typing import Optional, List
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
-from typing import Optional
 
 # Import the RIFFs agent harness
 try:
@@ -15,11 +15,11 @@ except Exception as e:
 
 app = FastAPI(
     title="RIFFs Agent API",
-    description="Autonomous AI Practice & Sketching Partner for Musicians",
+    description="Autonomous AI Practice & Sketching Partner for Musicians (Day 1 Milestone)",
     version="0.1.0"
 )
 
-# Root route serves the interactive Day 0 prototype
+# Root route serves the interactive prototype
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
     index_file = Path(__file__).parent / "index.html"
@@ -33,6 +33,7 @@ async def health_check():
     return {
         "status": "healthy",
         "app": "RIFFs Agent",
+        "version": "0.1.0 (Day 1)",
         "model": "anthropic/claude-sonnet-5-5",
         "has_api_key": bool(os.getenv("ANTHROPIC_API_KEY"))
     }
@@ -41,39 +42,64 @@ class GenerateRequest(BaseModel):
     prompt: str
     key: Optional[str] = "Am"
     bpm: Optional[int] = 110
-    locked_parts: Optional[list] = []
+    chords: Optional[str] = "Am - F - C - G"
+    instruments: Optional[List[str]] = ["bass_guitar", "rhythm_guitar", "cymbals"]
+    locked_parts: Optional[List[str]] = []
 
 @app.post("/api/generate")
 async def generate_riff(req: GenerateRequest):
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        return {
-            "status": "mock",
-            "message": "ANTHROPIC_API_KEY not configured in Vercel environment variables yet.",
-            "data": {
-                "key": req.key,
-                "bpm": req.bpm,
-                "chords": ["Am", "F", "C", "G"],
-                "nashville": ["1m", "4", "1", "5"],
-                "tab": "e|---0-------1-------0-------3---|\nB|---1-------1-------1-------0---|\nG|---2-------2-------0-------0---|\nD|---2-------3-------2-------0---|\nA|---0-------3-------3-------2---|\nE|-----------1---------------3---|",
-                "notes": "Generated Day 0 blueprint ready for playback and practice."
+    # Server-side boundary validations (Deliverable 3 error handling table)
+    instruments = req.instruments or []
+    if len(instruments) < 1 or len(instruments) > 3:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": "INSTRUMENT_COUNT",
+                "detail": "Select 1 to 3 instruments (1 per tier)."
             }
-        }
-    
+        )
+
+    bpm = req.bpm if req.bpm is not None else 110
+    if bpm < 60 or bpm > 200:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": "BPM_RANGE",
+                "detail": "Tempo must be between 60 and 200 BPM."
+            }
+        )
+
     if not agent:
-        return JSONResponse(status_code=500, content={"error": "RiffsAgent not initialized"})
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "code": "AGENT_INIT_FAILED",
+                "detail": "RiffsAgent harness could not be initialized."
+            }
+        )
 
     try:
-        enriched_prompt = (
-            f"Generate an instrumental riff blueprint in Key: {req.key}, BPM: {req.bpm}. "
-            f"Locked parts: {req.locked_parts}. Musician Prompt: {req.prompt}"
+        data = agent.generate(
+            prompt=req.prompt,
+            key=req.key or "Am",
+            bpm=bpm,
+            chords=req.chords or "Am - F - C - G",
+            instruments=instruments,
+            locked_parts=req.locked_parts or []
         )
-        response_text = agent.run_turn(enriched_prompt)
         return {
             "status": "success",
-            "response": response_text
+            "data": data
         }
     except Exception as exc:
         return JSONResponse(
             status_code=500,
-            content={"status": "error", "error": str(exc)}
+            content={
+                "status": "error",
+                "code": "GENERATION_ERROR",
+                "detail": str(exc)
+            }
         )
