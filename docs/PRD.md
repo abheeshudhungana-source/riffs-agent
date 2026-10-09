@@ -41,25 +41,26 @@ Instrumentalists who practice and write (guitarists, bassists, keyboardists, sax
 2. **Secondary: Songwriters & Producers:** Want to turn chord sketches into multi-track arrangements with clean DAW drag-and-drop.
 3. **Tertiary: Short-Form Video Creators:** Need instant, royalty-safe background music dubbed directly to phone clips without opening video editors.
 
-### 3.2. Musical Capture & Ingress (Stage 1)
+### 3.2. Musical Capture & Ingress (Stage 1: Seed The Band)
 - **Typed Chord Progression:** Accepts standard chord names (`Am - Dm - G - C`) or Nashville Numbers (`1 - 4 - 5 - 1`).
-- **Text Prompt:** Stylistic / genre guidance (e.g., *"Neo-soul pocket groove at 92 BPM"*).
-- **Video Input:** *(Optional)* Raw `.mp4`/`.mov` clip to be dubbed.
+- **Streamlined Action Trigger:** Generates accompaniment directly from chord foundation without inline clutter.
+- **Dedicated Dubbing Navigation:** Video dubbing is decoupled to a dedicated top-right workspace (`🎬 Dubbing & Editing`), keeping the core practice canvas clean and focused.
 
-### 3.3. Sound Matrix (3 Registers $\times$ 3 Functional Roles)
-Users can select **1, 2, or up to 3 instruments** concurrently:
+### 3.3. Sound Matrix & Practice Ensemble Setup (3 Registers $\times$ 3 Functional Roles)
+Users configure their practice band via Tier Dropdown Selectors located directly inside the Practice Suite:
 
-| Sound Tier | Percussion | Rhythm | Lead |
+| Sound Tier | Percussion Options | Rhythm Options | Lead Options |
 | :--- | :--- | :--- | :--- |
 | **Low End** (Sub / Bass) | Bass drums, Floor tom | Bass guitar, Contrabass | — |
 | **Medium End** (Core Body) | Bongos | Rhythm guitar, Acoustic piano | Tenor saxophone |
 | **High End** (Top / Air) | Cymbals, Triangle | Ukulele | Piccolo |
 
-### 3.4. Practice Mode & Playback Suite
-- **Mute-Your-Part:** One-click mute on any instrument so the player can solo along with the backing band.
-- **Speed Trainer:** Automatically increases playback tempo by $+2$ to $+5$ BPM after each clean loop iteration.
-- **Single-Bar Looper:** Highlight a single measure to drill a difficult transition repeatedly.
-- **Count-In Pre-Roll:** 4-beat audible woodblock click before playback begins.
+### 3.4. Practice Mode & Playback Suite (Hardware Studio Feel)
+- **Practice Ensemble Setup:** Dynamic dropdowns for Low End, Mid End, and High End instrument selection.
+- **Hardware-Style LED Mute Switches:** Dedicated kill-switch buttons for each tier (**Mute Low**, **Mute Mid**, **Mute High**) with active red glowing warning LEDs (`MUTED` state) for seamless live play-along.
+- **Metronome with Green LED Indicator:** Hardware-style ON/OFF toggle with glowing emerald LED.
+- **Speed Trainer:** Checkbox toggle auto-incrementing tempo by $+3$ BPM after each clean 8-bar loop iteration.
+- **Symmetric Transport Bar:** Centered, prominent ▶ Play/Pause trigger, live Bar ($1 \to 8$) & Beat ($1 \to 4$) tracking, inline Tempo slider ($60 \to 200$ BPM, 4/4 Metre), and non-destructive Take selector (`T1`, `T2`, `T3`).
 
 ### 3.5. Multi-Format Notation Dashboard
 - **View A: Chord Chart & Nashville Numbers:** Clean, high-contrast lead sheet showing measure bars (`| 1 | 4 | 5 | 1 |`) for instant transposing.
@@ -67,13 +68,12 @@ Users can select **1, 2, or up to 3 instruments** concurrently:
 - **View C: Staff Sheet Music:** Traditional 5-line notation.
 
 ### 3.6. Part-Locking & Versioning (Replacing One-Shot Edits)
-- **Part Lock:** Users can click a lock icon (🔒) on any lane (e.g., keep the bassline) and prompt the agent to regenerate only the drum fill and lead.
-- **Take History:** Preserves the last 5 iterations as selectable tabs (`Take 1`, `Take 2`, `Take 3`) preventing accidental loss of good takes.
+- **Part Lock:** Users can click a lock icon (🔒) on any lane (e.g., keep the bassline) and prompt the agent to regenerate only companion lanes, preserving symbolic MIDI byte-fidelity.
+- **Take History:** Preserves the last 5 iterations as selectable tabs (`Take 1`, `Take 2`, `Take 3`).
 
-### 3.7. Production Handoff & Headless Video Muxing
-- **DAW File Naming:** Stems formatted as `{project}_{key}_{bpm}bpm_{instrument}.wav`.
-- **License Certificate:** Each export includes `license_cert.json` proving all audio originates from licensed acoustic multisamples.
-- **Headless Video Dubbing (`attach_riff_to_video`):** Strips camera audio and remuxes the riff into a clean MP4 in $< 1.5$ seconds (strictly **no video player or editor UI**).
+### 3.7. Audio Export & Delivery
+- **Save MP3:** Immediate, frictionless download of the generated accompaniment riff as high-quality 320kbps MP3 for practice across mobile and desktop devices.
+- **Headless Video Dubbing (`attach_riff_to_video`):** Accessible via dedicated Dubbing & Editing workspace; strips camera audio and remuxes the riff into a clean MP4 in $< 1.5$ seconds (strictly **no video player or editor UI**).
 
 ---
 

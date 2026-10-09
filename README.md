@@ -14,8 +14,8 @@ Unlike audio-first jukeboxes that generate audio and guess the notes afterward, 
 - **Input Your Own Ideas:** Seed the band with typed chords (`Am - F - C - G` or Nashville Numbers `1 - 4 - 5 - 1`) or genre prompts.
 - **Working Musician Charts:** Triple-view of Nashville Number Chord Charts, 6-String Guitar Tablature, and traditional Staff Notation.
 - **Part-Locking & Takes:** Lock parts you love (e.g. lock the bassline 🔒) and regenerate only the drums or lead, with full version history.
-- **Practice Suite:** Mute-your-part playalong, Speed Trainer (+3 BPM auto-ramp per loop), and single-bar looping.
-- **DAW & Social Export:** Clean stem export (`riff_Am_120bpm_bass.wav`), royalty-free license certificates, and 1-click headless video dubbing (`attach_riff_to_video`) for social creators.
+- **Practice Suite:** Hardware-style LED kill switches (Mute Low / Mid / High, Metronome with green LED), Register tier instrument assignments (Low, Mid, High), Speed Trainer (+3 BPM auto-ramp per loop), and count-in pre-roll.
+- **Audio & Social Export:** 1-click high-fidelity MP3 export (`Save MP3` at 320kbps) for instant practice capture; decoupled video dubbing placeholder (`attach_riff_to_video`).
 
 ---
 
@@ -29,12 +29,15 @@ riffs_agent/
 ├── README.md             # Project overview and daily setup guide
 ├── requirements.txt      # Core Python dependencies (litellm, python-dotenv, etc.)
 ├── agent.py              # Main autonomous agent harness & loop
+├── app.py                # FastAPI backend & Vercel serverless entrypoint
 ├── test_model.py         # Verification script to test Claude connectivity
+├── index.html            # Production interactive frontend & practice dashboard
 ├── config/
 │   ├── llm_config.json   # Model registry (Claude Sonnet 5.5, Gemini, GPT)
 │   └── render_endpoint_map.json # Audio rendering endpoint registry
 └── docs/
-    └── PRD.md            # Complete Product Requirements Document & Eval Cards
+    ├── PRD.md            # Complete Product Requirements Document & Eval Cards
+    └── CLAUDE_DESIGN_PROMPT.md # Day 2 Zero-Token-Waste Claude Prompt Specification
 ```
 
 ---
