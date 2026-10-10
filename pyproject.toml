@@ -2,9 +2,10 @@
 name = "riffs-agent"
 version = "0.1.0"
 description = "AI Practice & Sketching Partner for Musicians"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.34.0",
     "litellm>=1.40.0",
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0"
