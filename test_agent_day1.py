@@ -56,12 +56,13 @@ class TestRiffsAgentDay1(unittest.TestCase):
         self.assertEqual(t1["bpm"], 110)
         self.assertEqual(t1["nashville_chart"], ["1m", "b6", "b3", "b7"])
         self.assertIn("license_certificate", t1)
-        self.assertTrue(t1["license_certificate"]["license_id"].startswith("CERT-RIFFS-2026-X"))
+        self.assertIsNone(t1["license_certificate"]["license_id"])
+        self.assertEqual(t1["license_certificate"]["status"], "not_issued")
 
         # Check stems
         stems = t1["stems"]
         self.assertEqual(len(stems), 3)
-        self.assertEqual(stems[0]["filename"], "riff_Am_110bpm_bass_guitar.wav")
+        self.assertEqual(stems[0]["filename"], "riff_Am_110bpm_bass_guitar.mid")
         self.assertTrue(stems[0]["locked"])
         self.assertFalse(stems[1]["locked"])
 
