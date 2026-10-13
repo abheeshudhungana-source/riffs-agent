@@ -428,136 +428,316 @@ E|---------------------------------------------------------5-3-0----|
     </div>
   </div>
 
-  <!-- SIMPLE PROTOTYPE INTERACTIVITY SCRIPT -->
-  <script>
-    // Web Audio Mock Prototype
-    let isPlaying = false;
-    let bpm = 110;
-    let bar = 1;
-    let timer = null;
+  <!-- RIFFs AUDIO ENGINE: renders the symbolic score to sound (pure DSP, no DOM, no AudioContext) -->
+  <script id="riffs-engine">
+  (function (root) {
+    'use strict';
+    var TWO_PI = Math.PI * 2;
+    var TABLE_SIZE = 2048;
 
-    const playBtn = document.getElementById('btn-play-pause');
-    const bpmSlider = document.getElementById('slider-bpm');
-    const bpmVal = document.getElementById('val-bpm');
-    const hudBpm = document.getElementById('hud-bpm');
-    const currentBarEl = document.getElementById('current-bar');
-    const barSteps = document.querySelectorAll('.bar-step');
-
-    bpmSlider.addEventListener('input', (e) => {
-      bpm = e.target.value;
-      bpmVal.innerText = bpm + ' BPM';
-      hudBpm.innerText = bpm;
-    });
-
-    playBtn.addEventListener('click', () => {
-      isPlaying = !isPlaying;
-      playBtn.innerText = isPlaying ? '⏸' : '▶';
-      if (isPlaying) {
-        startLoop();
-      } else {
-        clearInterval(timer);
+    function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+    function decayRate(t60, sr) { return Math.pow(0.001, 1 / (t60 * sr)); }
+    function makeRng(seed) { // mulberry32: deterministic noise so a score always sounds the same
+      var s = seed >>> 0;
+      return function () {
+        s = (s + 0x6D2B79F5) >>> 0;
+        var t = s;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function makeTable(harmonics) {
+      var table = new Float32Array(TABLE_SIZE + 1), peak = 0, i, h;
+      for (i = 0; i < TABLE_SIZE; i++) {
+        var v = 0;
+        for (h = 0; h < harmonics.length; h++) v += harmonics[h] * Math.sin(TWO_PI * (h + 1) * i / TABLE_SIZE);
+        table[i] = v;
+        if (Math.abs(v) > peak) peak = Math.abs(v);
       }
-    });
+      for (i = 0; i < TABLE_SIZE; i++) table[i] /= peak;
+      table[TABLE_SIZE] = table[0];
+      return table;
+    }
+    var SAX_TABLE = makeTable([1.0, 0.62, 0.78, 0.35, 0.42, 0.22, 0.25, 0.12, 0.14, 0.07, 0.08, 0.04, 0.04, 0.02]);
+    var PICCOLO_TABLE = makeTable([1.0, 0.35, 0.18, 0.08, 0.03]);
 
-    function startLoop() {
-      clearInterval(timer);
-      const intervalMs = (60 / bpm) * 1000 * 4; // 4 beats per bar
-      timer = setInterval(() => {
-        bar = (bar % 8) + 1;
-        currentBarEl.innerText = bar;
-        barSteps.forEach((step, idx) => {
-          step.className = idx === (bar - 1) 
-            ? 'bar-step flex-1 h-full rounded-sm bg-emerald-500 transition-all' 
-            : 'bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all';
-        });
-
-        // Loop completed: state machine handles +3 BPM speed-trainer ramp (cap 200)
-        if (bar === 1) {
-          const before = state.bpm;
-          dispatch({ type: 'LOOP_COMPLETE' });
-          if (state.bpm !== before) startLoop();
-        }
-      }, intervalMs);
+    function release(out, nOff, rel) { // linear note-off fade
+      for (var n = nOff; n < out.length; n++) out[n] *= Math.max(0, 1 - (n - nOff) / rel);
+      return out;
+    }
+    function onePoleLow(out, k) {
+      var y = 0;
+      for (var n = 0; n < out.length; n++) { y += k * (out[n] - y); out[n] = y; }
+      return out;
     }
 
-    // Chart Tabs Switching
-    document.querySelectorAll('.chart-tab-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        document.querySelectorAll('.chart-tab-btn').forEach(b => {
-          b.className = 'chart-tab-btn px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200';
-        });
-        e.target.className = 'chart-tab-btn px-3 py-1 rounded-lg bg-amber-500 text-black font-bold';
-
-        const view = e.target.dataset.view;
-        document.getElementById('view-nashville').classList.toggle('hidden', view !== 'nashville');
-        document.getElementById('view-tab').classList.toggle('hidden', view !== 'tab');
-        document.getElementById('view-sheet').classList.toggle('hidden', view !== 'sheet');
-      });
-    });
-
-    // Part Lock Toggles
-    document.querySelectorAll('.lock-part-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const isLocked = btn.innerText.includes('Locked');
-        if (isLocked) {
-          btn.innerHTML = '<span>🔓 Unlock</span>';
-          btn.className = 'lock-part-btn text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 font-mono';
-        } else {
-          btn.innerHTML = '<span>🔒 Locked</span>';
-          btn.className = 'lock-part-btn text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-mono font-bold';
-        }
-      });
-    });
-
-    // Metronome LED Toggle Logic
-    let isMetronomeOn = true;
-    const metronomeBtn = document.getElementById('btn-metronome');
-    const metronomeLed = document.getElementById('led-metronome');
-    const metronomeStatus = document.getElementById('status-metronome');
-
-    if (metronomeBtn) {
-      metronomeBtn.addEventListener('click', () => {
-        isMetronomeOn = !isMetronomeOn;
-        if (isMetronomeOn) {
-          metronomeLed.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] transition-all';
-          metronomeStatus.innerText = 'ON';
-          metronomeStatus.className = 'text-[10px] text-emerald-400 font-bold uppercase mono';
-        } else {
-          metronomeLed.className = 'w-2.5 h-2.5 rounded-full bg-slate-700 transition-all';
-          metronomeStatus.innerText = 'OFF';
-          metronomeStatus.className = 'text-[10px] text-slate-500 font-bold uppercase mono';
-        }
-      });
+    // ---- Plucked string: extended Karplus-Strong with a tuning all-pass ----
+    function pluckVoice(freq, nOff, rel, sr, p, rng) {
+      var len = Math.min(nOff + rel, Math.floor(4 * sr));
+      var D = sr / freq - 0.5;
+      var N = Math.max(3, Math.floor(D - 0.5));
+      var d = D - N, C = (1 - d) / (1 + d);
+      var rho = Math.min(0.9995, Math.pow(10, -3 / (p.t60 * freq)));
+      var buf = new Float32Array(N), tmp = new Float32Array(N), i, lp = 0;
+      for (i = 0; i < N; i++) { lp += p.bright * ((rng() * 2 - 1) - lp); tmp[i] = lp; }
+      var pk = Math.max(1, Math.floor(N * p.pick)), energy = 0;
+      for (i = 0; i < N; i++) { buf[i] = tmp[i] - tmp[(i + pk) % N]; energy += buf[i] * buf[i]; }
+      var norm = 0.35 / Math.sqrt(energy / N + 1e-12);
+      for (i = 0; i < N; i++) buf[i] *= norm;
+      var out = new Float32Array(len), idx = 0, x1 = 0, y1 = 0;
+      for (var n = 0; n < len; n++) {
+        var cur = buf[idx], nx = idx + 1 === N ? 0 : idx + 1;
+        var x = rho * 0.5 * (cur + buf[nx]);
+        var y = C * x + x1 - C * y1;
+        x1 = x; y1 = y;
+        buf[idx] = y; out[n] = cur; idx = nx;
+      }
+      release(out, nOff, rel);
+      if (p.post) onePoleLow(out, p.post);
+      return out;
     }
 
-    // Tier Mute LED Kill Switches Logic
-    const muteStates = { low: false, mid: false, high: false };
-    document.querySelectorAll('.track-mute-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const track = btn.dataset.track;
-        muteStates[track] = !muteStates[track];
-        const isMuted = muteStates[track];
-        const led = document.getElementById(`led-mute-${track}`);
-        const status = document.getElementById(`status-mute-${track}`);
+    // ---- Piano: inharmonic additive partials with per-partial decay ----
+    function pianoVoice(midi, nOff, rel, sr, vel, rng) {
+      var f = mtof(midi), len = Math.min(nOff + rel, Math.floor(5 * sr));
+      var out = new Float32Array(len), B = 0.00012;
+      var nPart = Math.max(3, Math.min(10, Math.floor(6500 / f)));
+      var T0 = Math.max(0.9, Math.min(7, 7 - (midi - 30) * 0.07));
+      var bright = 0.35 + 0.65 * vel / 127;
+      for (var k = 1; k <= nPart; k++) {
+        var fk = f * k * Math.sqrt(1 + B * k * k);
+        if (fk > 0.45 * sr) break;
+        var amp = Math.pow(bright, (k - 1) * 0.22) / Math.pow(k, 1.05) * (0.35 + 0.65 * Math.abs(Math.sin(Math.PI * k * 0.12)));
+        var rate = decayRate(T0 / (1 + 0.6 * (k - 1)), sr);
+        var w = TWO_PI * fk / sr, c = Math.cos(w), s = Math.sin(w);
+        var ph0 = rng() * TWO_PI, px = Math.cos(ph0), py = Math.sin(ph0), env = amp;
+        for (var n = 0; n < len; n++) {
+          out[n] += env * py;
+          var nx = px * c - py * s;
+          py = px * s + py * c; px = nx;
+          env *= rate;
+        }
+      }
+      var lp = 0, hammer = Math.min(len, Math.floor(0.012 * sr));
+      for (var h = 0; h < hammer; h++) { lp += 0.25 * ((rng() * 2 - 1) - lp); out[h] += lp * 0.25 * (1 - h / hammer); }
+      return release(out, nOff, rel);
+    }
 
-        if (isMuted) {
-          // Muted (Kill Active): Red glowing warning LED
-          led.className = 'w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)] transition-all';
-          status.innerText = 'MUTED';
-          status.className = 'text-[10px] mono text-rose-400 uppercase font-bold';
-          btn.classList.add('border-rose-500/50', 'bg-rose-950/20');
-        } else {
-          // Live (Unmuted)
-          led.className = 'w-2 h-2 rounded-full bg-slate-700 transition-all';
-          status.innerText = 'LIVE';
-          status.className = 'text-[10px] mono text-slate-500 uppercase font-semibold';
-          btn.classList.remove('border-rose-500/50', 'bg-rose-950/20');
+    // ---- Wind (sax / piccolo): wavetable + vibrato + breath ----
+    function windVoice(table, freq, nOff, rel, sr, p, rng) {
+      var len = Math.min(nOff + rel, Math.floor(6 * sr));
+      var out = new Float32Array(len), A = Math.max(1, Math.floor(p.attack * sr));
+      var phase = 0, lp = 0, nlp = 0;
+      for (var n = 0; n < len; n++) {
+        var t = n / sr;
+        var vib = t > p.vibDelay ? Math.min(1, (t - p.vibDelay) / 0.3) : 0;
+        phase += freq * (1 + p.vibDepth * vib * Math.sin(TWO_PI * p.vibRate * t)) / sr;
+        phase -= Math.floor(phase);
+        var pos = phase * TABLE_SIZE, i0 = pos | 0, s = table[i0] + (table[i0 + 1] - table[i0]) * (pos - i0);
+        var env = n < A ? n / A : 1;
+        env = env * env * (3 - 2 * env);
+        var k = n < A * 3 ? p.lpStart + (p.lpEnd - p.lpStart) * (n / (A * 3)) : p.lpEnd;
+        lp += k * (s - lp);
+        nlp += 0.3 * ((rng() * 2 - 1) - nlp);
+        out[n] = (lp + p.breath * nlp) * env;
+      }
+      return release(out, nOff, rel);
+    }
+
+    // ---- Percussion ----
+    function kickVoice(sr, rng) {
+      var len = Math.floor(0.6 * sr), out = new Float32Array(len), ph = 0, rate = decayRate(0.38, sr), env = 1, lp = 0;
+      for (var n = 0; n < len; n++) {
+        var t = n / sr;
+        ph += TWO_PI * (46 + 100 * Math.exp(-t * 38)) / sr;
+        lp += 0.35 * ((rng() * 2 - 1) - lp);
+        out[n] = Math.sin(ph) * env + lp * 0.5 * Math.exp(-t * 500);
+        env *= rate;
+      }
+      return out;
+    }
+    function tomVoice(sr, rng) {
+      var len = Math.floor(0.9 * sr), out = new Float32Array(len), ph = 0, ph2 = 0, rate = decayRate(0.65, sr), env = 1, lp = 0;
+      for (var n = 0; n < len; n++) {
+        var t = n / sr, f = 72 + 55 * Math.exp(-t * 16);
+        ph += TWO_PI * f / sr; ph2 += TWO_PI * f * 1.58 / sr;
+        lp += 0.4 * ((rng() * 2 - 1) - lp);
+        out[n] = (Math.sin(ph) + 0.25 * Math.sin(ph2) * Math.exp(-t * 14)) * env + lp * 0.35 * Math.exp(-t * 160);
+        env *= rate;
+      }
+      return out;
+    }
+    function bongoVoice(base, sr, rng) {
+      var len = Math.floor(0.35 * sr), out = new Float32Array(len), ph = 0, rate = decayRate(0.2, sr), env = 1, lp = 0, hp = 0, prev = 0;
+      for (var n = 0; n < len; n++) {
+        var t = n / sr;
+        ph += TWO_PI * (base * (1 + 0.12 * Math.exp(-t * 70))) / sr;
+        var w = rng() * 2 - 1; hp = 0.7 * (hp + w - prev); prev = w;
+        lp += 0.5 * (hp - lp);
+        out[n] = Math.sin(ph) * env + lp * 0.45 * Math.exp(-t * 260);
+        env *= rate;
+      }
+      return out;
+    }
+    var METAL = [205.3, 304.4, 369.6, 522.7, 540.0, 800.0];
+    function metalVoice(len, sr, o, rng) {
+      var out = new Float32Array(len), ph = [0, 0, 0, 0, 0, 0], j;
+      var slow = 1, fast = 1, rs = decayRate(o.t60, sr), rf = decayRate(o.ping || 0.04, sr);
+      var a = 1 / (1 + TWO_PI * o.hp / sr), xa = 0, ya = 0, xb = 0, yb = 0;
+      for (var n = 0; n < len; n++) {
+        var sq = 0;
+        for (j = 0; j < 6; j++) { ph[j] += METAL[j] * o.scale / sr; if (ph[j] >= 1) ph[j] -= 1; sq += ph[j] < 0.5 ? 1 : -1; }
+        var x = o.tone * sq / 6 + o.noise * (rng() * 2 - 1);
+        var y = a * (ya + x - xa); xa = x; ya = y;
+        var z = a * (yb + y - xb); xb = y; yb = z;
+        out[n] = z * (slow * (1 - (o.pm || 0)) + fast * (o.pm || 0));
+        slow *= rs; fast *= rf;
+      }
+      return out;
+    }
+    function triangleVoice(muted, sr, rng) {
+      var len = Math.floor((muted ? 0.15 : 2.6) * sr), out = new Float32Array(len);
+      var ratios = [1, 2.41, 4.07, 6.15, 8.7], amps = [1, 0.55, 0.38, 0.22, 0.12], base = 1900;
+      var t60 = muted ? 0.08 : 2.4;
+      for (var k = 0; k < ratios.length; k++) {
+        var w = TWO_PI * base * ratios[k] / sr, c = Math.cos(w), s = Math.sin(w), rate = decayRate(t60 / (1 + k * 0.35), sr);
+        var px = 1, py = 0, env = amps[k];
+        for (var n = 0; n < len; n++) {
+          out[n] += env * py;
+          var nx = px * c - py * s; py = px * s + py * c; px = nx; env *= rate;
+        }
+      }
+      for (var h = 0; h < Math.floor(0.004 * sr); h++) out[h] += (rng() * 2 - 1) * 0.3;
+      return out;
+    }
+
+    // ---- Instrument table ----
+    var PLUCK = {
+      bass_guitar: { t60: 1.4, bright: 0.18, pick: 0.12, post: 0.22, rel: 0.12 },
+      contrabass: { t60: 1.0, bright: 0.22, pick: 0.1, post: 0.2, rel: 0.1 },
+      rhythm_guitar: { t60: 2.0, bright: 0.45, pick: 0.18, rel: 0.09 },
+      ukulele: { t60: 0.8, bright: 0.55, pick: 0.25, rel: 0.06 }
+    };
+    var TRIM = { // per-instrument level, balanced from measured loop RMS so no part drowns the others
+      bass_guitar: 1.6, contrabass: 2.0, rhythm_guitar: 1.1, ukulele: 1.6, acoustic_piano: 0.3,
+      tenor_sax: 0.33, piccolo: 0.24, bass_drums: 0.9, floor_tom: 0.8, bongos: 0.7, cymbals: 1.8, triangle: 0.26
+    };
+    var PAN = { low: 0, mid: -0.25, high: 0.25 };
+
+    function voice(inst, midi, durSec, vel, sr, seed) {
+      var rng = makeRng(seed), nOff = Math.max(1, Math.round(durSec * sr)), f = mtof(midi), p;
+      if (PLUCK[inst]) {
+        p = PLUCK[inst];
+        var q = { t60: p.t60, bright: Math.min(0.9, p.bright * (0.6 + 0.8 * vel / 127)), pick: p.pick, post: p.post };
+        return pluckVoice(f, nOff, Math.floor(p.rel * sr), sr, q, rng);
+      }
+      switch (inst) {
+        case 'acoustic_piano': return pianoVoice(midi, nOff, Math.floor(0.22 * sr), sr, vel, rng);
+        case 'tenor_sax':
+          return windVoice(SAX_TABLE, f, nOff, Math.floor(0.09 * sr), sr,
+            { attack: 0.035, vibDelay: 0.25, vibDepth: 0.006, vibRate: 5.4, lpStart: 0.12, lpEnd: 0.5, breath: 0.05 }, rng);
+        case 'piccolo':
+          return windVoice(PICCOLO_TABLE, f, nOff, Math.floor(0.08 * sr), sr,
+            { attack: 0.02, vibDelay: 0.15, vibDepth: 0.003, vibRate: 5.8, lpStart: 0.4, lpEnd: 0.8, breath: 0.04 }, rng);
+        case 'bass_drums': return kickVoice(sr, rng);
+        case 'floor_tom': return tomVoice(sr, rng);
+        case 'bongos': return bongoVoice(midi === 60 ? 430 : 310, sr, rng);
+        case 'triangle': return triangleVoice(midi === 80, sr, rng);
+        case 'cymbals':
+          if (midi === 46) return metalVoice(Math.floor(0.6 * sr), sr, { scale: 3.5, hp: 6500, t60: 0.3, tone: 0.55, noise: 0.5 }, rng);
+          if (midi === 49) return metalVoice(Math.floor(2.6 * sr), sr, { scale: 2.2, hp: 3000, t60: 2.2, tone: 0.4, noise: 0.8, pm: 0.3, ping: 0.12 }, rng);
+          if (midi === 51) return metalVoice(Math.floor(1.6 * sr), sr, { scale: 3.0, hp: 3500, t60: 1.3, tone: 0.55, noise: 0.25, pm: 0.35, ping: 0.1 }, rng);
+          return metalVoice(Math.floor(0.14 * sr), sr, { scale: 3.5, hp: 7000, t60: 0.06, tone: 0.6, noise: 0.5 }, rng);
+      }
+      return new Float32Array(1);
+    }
+
+    function clickVoice(accent, sr) {
+      var len = Math.floor(0.05 * sr), out = new Float32Array(len), f = accent ? 1600 : 1000;
+      for (var n = 0; n < len; n++) { var t = n / sr; out[n] = Math.sin(TWO_PI * f * t) * Math.exp(-t * 110) * (accent ? 0.9 : 0.6); }
+      return out;
+    }
+    function addInto(dst, src, start, gain) {
+      var end = Math.min(dst.length, start + src.length);
+      for (var i = Math.max(0, start), j = i - start; i < end; i++, j++) dst[i] += src[j] * gain;
+    }
+
+    // Render one loop of the score: one mono buffer per tier + a metronome layer.
+    function renderLoop(score, bpm, sr) {
+      var spb = 60 / bpm, bpbar = score.beats_per_bar || 4, beats = score.loop_bars * bpbar;
+      var loopSamples = Math.round(beats * spb * sr), tail = Math.round(2.2 * sr);
+      var tiers = {}, click = new Float32Array(loopSamples + tail);
+      score.lanes.forEach(function (lane) {
+        var buf = new Float32Array(loopSamples + tail), trim = TRIM[lane.instrument] || 0.5;
+        lane.events.forEach(function (ev) {
+          var seed = ((ev.midi * 7919) ^ Math.round(ev.beat * 1000) ^ (lane.instrument.length * 104729)) >>> 0;
+          var v = voice(lane.instrument, ev.midi, ev.dur * spb, ev.vel, sr, seed);
+          addInto(buf, v, Math.round(ev.beat * spb * sr), trim * Math.pow(ev.vel / 127, 1.2));
+        });
+        tiers[lane.tier] = buf;
+      });
+      var accent = clickVoice(true, sr), tick = clickVoice(false, sr);
+      for (var b = 0; b < beats; b++) addInto(click, b % bpbar === 0 ? accent : tick, Math.round(b * spb * sr), 0.5);
+      return { tiers: tiers, click: click, loopSamples: loopSamples, tailSamples: tail, sr: sr, bpm: bpm, bars: score.loop_bars, beatsPerBar: bpbar };
+    }
+    function renderCountIn(bpm, sr, beats) {
+      var spb = 60 / bpm, n = beats || 4, out = new Float32Array(Math.round(n * spb * sr) + Math.round(0.1 * sr));
+      for (var b = 0; b < n; b++) addInto(out, clickVoice(b === 0, sr), Math.round(b * spb * sr), 0.7);
+      return out;
+    }
+
+    // Mix the loop down to stereo for export. Tails wrap around so the loop repeats seamlessly.
+    function mixdown(loop, muted, loops) {
+      var n = loop.loopSamples, reps = loops || 1, left = new Float32Array(n * reps), right = new Float32Array(n * reps);
+      Object.keys(loop.tiers).forEach(function (tier) {
+        if (muted && muted[tier]) return;
+        var src = loop.tiers[tier], pan = PAN[tier] || 0, ang = (pan + 1) * Math.PI / 4, gl = Math.cos(ang), gr = Math.sin(ang), i, r;
+        for (r = 0; r < reps; r++) {
+          for (i = 0; i < n; i++) { left[r * n + i] += src[i] * gl; right[r * n + i] += src[i] * gr; }
+          for (i = 0; i < loop.tailSamples; i++) {
+            var at = (r * n + n + i) % (n * reps); // wrap the ring-out into the start of the next repeat
+            left[at] += src[n + i] * gl; right[at] += src[n + i] * gr;
+          }
         }
       });
-    });
+      var peak = 0, k;
+      for (k = 0; k < left.length; k++) { left[k] = Math.tanh(left[k] * 1.4); right[k] = Math.tanh(right[k] * 1.4); }
+      for (k = 0; k < left.length; k++) peak = Math.max(peak, Math.abs(left[k]), Math.abs(right[k]));
+      var g = peak > 0 ? 0.85 / peak : 1;
+      for (k = 0; k < left.length; k++) { left[k] *= g; right[k] *= g; }
+      return { left: left, right: right, sr: loop.sr };
+    }
+    function toInt16(f) {
+      var out = new Int16Array(f.length);
+      for (var i = 0; i < f.length; i++) out[i] = Math.max(-32768, Math.min(32767, Math.round(f[i] * 32767)));
+      return out;
+    }
+    function encodeWav(mix) {
+      var l = toInt16(mix.left), r = toInt16(mix.right), n = l.length, bytes = new Uint8Array(44 + n * 4), dv = new DataView(bytes.buffer);
+      function str(o, s) { for (var i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); }
+      str(0, 'RIFF'); dv.setUint32(4, 36 + n * 4, true); str(8, 'WAVE'); str(12, 'fmt ');
+      dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 2, true);
+      dv.setUint32(24, mix.sr, true); dv.setUint32(28, mix.sr * 4, true); dv.setUint16(32, 4, true); dv.setUint16(34, 16, true);
+      str(36, 'data'); dv.setUint32(40, n * 4, true);
+      for (var i = 0; i < n; i++) { dv.setInt16(44 + i * 4, l[i], true); dv.setInt16(46 + i * 4, r[i], true); }
+      return bytes;
+    }
+
+    root.RiffsAudio = {
+      voice: voice, renderLoop: renderLoop, renderCountIn: renderCountIn, mixdown: mixdown,
+      encodeWav: encodeWav, toInt16: toInt16, mtof: mtof, TRIM: TRIM, PAN: PAN
+    };
+  })(typeof window !== 'undefined' ? window : globalThis);
+  </script>
+
+  <!-- RIFFs WEB AUDIO ENGINE & INTERACTIVITY SCRIPT -->
+  <script>
+    // Embedded Initial Take 1 (Seed 1, Key Am, 110 BPM, Funky Neo-Soul)
+    var INITIAL_TAKE = {"id": 1, "payload": {"key": "Am", "bpm": 110, "chords": ["Am", "F", "C", "G"], "nashville_chart": ["1m", "b6", "b3", "b7"], "tab_score": "e|---0---|---1---|---0---|---3---|\nB|---1---|---1---|---1---|---0---|\nG|---2---|---2---|---0---|---0---|\nD|---2---|---3---|---2---|---0---|\nA|---0---|---3---|---3---|---2---|\nE|---x---|---1---|---x---|---3---|", "stems": [{"lane": "bass_guitar", "filename": "riff_Am_110bpm_bass_guitar.wav", "locked": false}, {"lane": "rhythm_guitar", "filename": "riff_Am_110bpm_rhythm_guitar.wav", "locked": false}, {"lane": "cymbals", "filename": "riff_Am_110bpm_cymbals.wav", "locked": false}], "license_certificate": {"license_id": "CERT-RIFFS-2026-X9B3B79C6", "status": "100% Royalty-Free Multisample Acoustic Engine", "terms": "Cleared for commercial release, live streaming, and DAW multi-track arrangement."}, "seed": 1, "score": {"version": 1, "key": "Am", "beats_per_bar": 4, "loop_bars": 8, "seed": 1, "feel": {"tags": ["neo-soul"], "swing": 0.45}, "bars": [{"bar": 1, "chord": "Am"}, {"bar": 2, "chord": "Am"}, {"bar": 3, "chord": "F"}, {"bar": 4, "chord": "F"}, {"bar": 5, "chord": "C"}, {"bar": 6, "chord": "C"}, {"bar": 7, "chord": "G"}, {"bar": 8, "chord": "G"}], "lanes": [{"tier": "low", "instrument": "bass_guitar", "locked": false, "source": "generated", "hash": "00885da2c5880c60592ced1a29565b879294560c3ba2267099567b4daf0ac5c4", "events": [{"beat": 0, "dur": 1.5, "midi": 33, "vel": 94}, {"beat": 1.575, "dur": 0.5, "midi": 33, "vel": 76}, {"beat": 2, "dur": 1.5, "midi": 40, "vel": 85}, {"beat": 3.575, "dur": 0.5, "midi": 34, "vel": 75}, {"beat": 4, "dur": 1.5, "midi": 33, "vel": 89}, {"beat": 5.575, "dur": 0.5, "midi": 33, "vel": 72}, {"beat": 6, "dur": 1.5, "midi": 40, "vel": 85}, {"beat": 7.575, "dur": 0.5, "midi": 42, "vel": 67}, {"beat": 8, "dur": 0.75, "midi": 41, "vel": 92}, {"beat": 9.575, "dur": 0.5, "midi": 41, "vel": 72}, {"beat": 10.575, "dur": 0.75, "midi": 36, "vel": 83}, {"beat": 11.25, "dur": 0.5, "midi": 42, "vel": 71}, {"beat": 12, "dur": 2.5, "midi": 41, "vel": 89}, {"beat": 15, "dur": 0.5, "midi": 36, "vel": 74}, {"beat": 15.575, "dur": 0.5, "midi": 35, "vel": 68}, {"beat": 16, "dur": 0.75, "midi": 36, "vel": 95}, {"beat": 17.575, "dur": 0.5, "midi": 36, "vel": 72}, {"beat": 18.575, "dur": 0.75, "midi": 43, "vel": 81}, {"beat": 19.25, "dur": 0.5, "midi": 37, "vel": 72}, {"beat": 20, "dur": 1.5, "midi": 36, "vel": 92}, {"beat": 21.575, "dur": 0.5, "midi": 36, "vel": 72}, {"beat": 22, "dur": 1.5, "midi": 43, "vel": 84}, {"beat": 23.575, "dur": 0.5, "midi": 32, "vel": 70}, {"beat": 24, "dur": 0.75, "midi": 31, "vel": 95}, {"beat": 25.575, "dur": 0.5, "midi": 31, "vel": 72}, {"beat": 26.575, "dur": 0.75, "midi": 38, "vel": 86}, {"beat": 27.25, "dur": 0.5, "midi": 32, "vel": 69}, {"beat": 28, "dur": 0.75, "midi": 31, "vel": 96}, {"beat": 29.575, "dur": 0.5, "midi": 31, "vel": 66}, {"beat": 30.575, "dur": 0.75, "midi": 38, "vel": 85}, {"beat": 31.25, "dur": 0.5, "midi": 34, "vel": 64}]}, {"tier": "mid", "instrument": "rhythm_guitar", "locked": false, "source": "generated", "hash": "2b283f7cfbd331ff851843418ba745697e8b9ec427c59284a3af1f8cc72a632e", "events": [{"beat": 0.0, "dur": 1.5, "midi": 57, "vel": 90}, {"beat": 0.012, "dur": 1.5, "midi": 60, "vel": 86}, {"beat": 0.024, "dur": 1.5, "midi": 64, "vel": 83}, {"beat": 1.575, "dur": 1, "midi": 64, "vel": 71}, {"beat": 1.587, "dur": 1, "midi": 60, "vel": 73}, {"beat": 1.599, "dur": 1, "midi": 57, "vel": 69}, {"beat": 2.575, "dur": 0.5, "midi": 64, "vel": 60}, {"beat": 2.587, "dur": 0.5, "midi": 60, "vel": 61}, {"beat": 2.599, "dur": 0.5, "midi": 57, "vel": 63}, {"beat": 3.0, "dur": 1, "midi": 57, "vel": 79}, {"beat": 3.012, "dur": 1, "midi": 60, "vel": 80}, {"beat": 3.024, "dur": 1, "midi": 64, "vel": 78}, {"beat": 4.0, "dur": 0.5, "midi": 57, "vel": 79}, {"beat": 4.012, "dur": 0.5, "midi": 60, "vel": 77}, {"beat": 4.024, "dur": 0.5, "midi": 64, "vel": 80}, {"beat": 5.575, "dur": 0.5, "midi": 64, "vel": 74}, {"beat": 5.587, "dur": 0.5, "midi": 60, "vel": 72}, {"beat": 5.599, "dur": 0.5, "midi": 57, "vel": 70}, {"beat": 6.575, "dur": 0.5, "midi": 64, "vel": 76}, {"beat": 6.587, "dur": 0.5, "midi": 60, "vel": 73}, {"beat": 6.599, "dur": 0.5, "midi": 57, "vel": 77}, {"beat": 7.575, "dur": 0.5, "midi": 64, "vel": 73}, {"beat": 7.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 7.599, "dur": 0.5, "midi": 57, "vel": 68}, {"beat": 8.0, "dur": 1.5, "midi": 57, "vel": 88}, {"beat": 8.012, "dur": 1.5, "midi": 60, "vel": 85}, {"beat": 8.024, "dur": 1.5, "midi": 65, "vel": 87}, {"beat": 9.575, "dur": 1, "midi": 65, "vel": 77}, {"beat": 9.587, "dur": 1, "midi": 60, "vel": 70}, {"beat": 9.599, "dur": 1, "midi": 57, "vel": 70}, {"beat": 10.575, "dur": 0.5, "midi": 65, "vel": 61}, {"beat": 10.587, "dur": 0.5, "midi": 60, "vel": 64}, {"beat": 10.599, "dur": 0.5, "midi": 57, "vel": 57}, {"beat": 11.0, "dur": 1, "midi": 57, "vel": 77}, {"beat": 11.012, "dur": 1, "midi": 60, "vel": 77}, {"beat": 11.024, "dur": 1, "midi": 65, "vel": 78}, {"beat": 12.0, "dur": 0.5, "midi": 57, "vel": 84}, {"beat": 12.012, "dur": 0.5, "midi": 60, "vel": 80}, {"beat": 12.024, "dur": 0.5, "midi": 65, "vel": 80}, {"beat": 13.575, "dur": 0.5, "midi": 65, "vel": 81}, {"beat": 13.587, "dur": 0.5, "midi": 60, "vel": 76}, {"beat": 13.599, "dur": 0.5, "midi": 57, "vel": 74}, {"beat": 14.575, "dur": 0.5, "midi": 65, "vel": 80}, {"beat": 14.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 14.599, "dur": 0.5, "midi": 57, "vel": 72}, {"beat": 15.575, "dur": 0.5, "midi": 65, "vel": 73}, {"beat": 15.587, "dur": 0.5, "midi": 60, "vel": 64}, {"beat": 15.599, "dur": 0.5, "midi": 57, "vel": 63}, {"beat": 16.0, "dur": 2, "midi": 55, "vel": 89}, {"beat": 16.012, "dur": 2, "midi": 60, "vel": 85}, {"beat": 16.024, "dur": 2, "midi": 64, "vel": 82}, {"beat": 18.0, "dur": 2, "midi": 55, "vel": 81}, {"beat": 18.012, "dur": 2, "midi": 60, "vel": 77}, {"beat": 18.024, "dur": 2, "midi": 64, "vel": 77}, {"beat": 20.0, "dur": 0.5, "midi": 55, "vel": 83}, {"beat": 20.012, "dur": 0.5, "midi": 60, "vel": 83}, {"beat": 20.024, "dur": 0.5, "midi": 64, "vel": 77}, {"beat": 21.575, "dur": 0.5, "midi": 64, "vel": 75}, {"beat": 21.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 21.599, "dur": 0.5, "midi": 55, "vel": 77}, {"beat": 22.575, "dur": 0.5, "midi": 64, "vel": 77}, {"beat": 22.587, "dur": 0.5, "midi": 60, "vel": 78}, {"beat": 22.599, "dur": 0.5, "midi": 55, "vel": 76}, {"beat": 23.575, "dur": 0.5, "midi": 64, "vel": 73}, {"beat": 23.587, "dur": 0.5, "midi": 60, "vel": 72}, {"beat": 23.599, "dur": 0.5, "midi": 55, "vel": 70}, {"beat": 24.0, "dur": 2, "midi": 55, "vel": 82}, {"beat": 24.012, "dur": 2, "midi": 59, "vel": 79}, {"beat": 24.024, "dur": 2, "midi": 62, "vel": 83}, {"beat": 26.0, "dur": 2, "midi": 55, "vel": 77}, {"beat": 26.012, "dur": 2, "midi": 59, "vel": 74}, {"beat": 26.024, "dur": 2, "midi": 62, "vel": 75}, {"beat": 28.0, "dur": 1.5, "midi": 55, "vel": 83}, {"beat": 28.012, "dur": 1.5, "midi": 59, "vel": 81}, {"beat": 28.024, "dur": 1.5, "midi": 62, "vel": 80}, {"beat": 29.575, "dur": 1, "midi": 62, "vel": 79}, {"beat": 29.587, "dur": 1, "midi": 59, "vel": 77}, {"beat": 29.599, "dur": 1, "midi": 55, "vel": 69}, {"beat": 30.575, "dur": 0.5, "midi": 62, "vel": 66}, {"beat": 30.587, "dur": 0.5, "midi": 59, "vel": 66}, {"beat": 30.599, "dur": 0.5, "midi": 55, "vel": 65}, {"beat": 31.0, "dur": 1, "midi": 55, "vel": 75}, {"beat": 31.012, "dur": 1, "midi": 59, "vel": 80}, {"beat": 31.024, "dur": 1, "midi": 62, "vel": 76}]}, {"tier": "high", "instrument": "cymbals", "locked": false, "source": "generated", "hash": "d53fa5b02c90a5818dc8502b38f981d12da7d6943111a51110525b46b1540bdd", "events": [{"beat": 0.0, "dur": 2.0, "midi": 49, "vel": 89}, {"beat": 0, "dur": 1, "midi": 51, "vel": 82}, {"beat": 1, "dur": 1, "midi": 51, "vel": 70}, {"beat": 1.575, "dur": 0.5, "midi": 51, "vel": 53}, {"beat": 2, "dur": 1, "midi": 51, "vel": 78}, {"beat": 3, "dur": 1, "midi": 51, "vel": 69}, {"beat": 3.575, "dur": 0.5, "midi": 51, "vel": 58}, {"beat": 4, "dur": 1, "midi": 51, "vel": 76}, {"beat": 5, "dur": 1, "midi": 51, "vel": 77}, {"beat": 5.575, "dur": 0.5, "midi": 51, "vel": 52}, {"beat": 6, "dur": 1, "midi": 51, "vel": 80}, {"beat": 7, "dur": 1, "midi": 51, "vel": 77}, {"beat": 7.575, "dur": 0.5, "midi": 51, "vel": 54}, {"beat": 8, "dur": 1, "midi": 51, "vel": 83}, {"beat": 9, "dur": 1, "midi": 51, "vel": 72}, {"beat": 9.575, "dur": 0.5, "midi": 51, "vel": 57}, {"beat": 10, "dur": 1, "midi": 51, "vel": 81}, {"beat": 11, "dur": 1, "midi": 51, "vel": 72}, {"beat": 11.575, "dur": 0.5, "midi": 51, "vel": 56}, {"beat": 12, "dur": 1, "midi": 51, "vel": 83}, {"beat": 13, "dur": 1, "midi": 51, "vel": 69}, {"beat": 13.575, "dur": 0.5, "midi": 51, "vel": 60}, {"beat": 14, "dur": 1, "midi": 51, "vel": 81}, {"beat": 15, "dur": 1, "midi": 51, "vel": 76}, {"beat": 15.575, "dur": 0.5, "midi": 51, "vel": 53}, {"beat": 16, "dur": 1, "midi": 51, "vel": 79}, {"beat": 17, "dur": 1, "midi": 51, "vel": 71}, {"beat": 17.575, "dur": 0.5, "midi": 51, "vel": 59}, {"beat": 18, "dur": 1, "midi": 51, "vel": 80}, {"beat": 19, "dur": 1, "midi": 51, "vel": 77}, {"beat": 19.575, "dur": 0.5, "midi": 51, "vel": 55}, {"beat": 20, "dur": 1, "midi": 51, "vel": 83}, {"beat": 21, "dur": 1, "midi": 51, "vel": 67}, {"beat": 21.575, "dur": 0.5, "midi": 51, "vel": 57}, {"beat": 22, "dur": 1, "midi": 51, "vel": 84}, {"beat": 23, "dur": 1, "midi": 51, "vel": 77}, {"beat": 23.575, "dur": 0.5, "midi": 51, "vel": 59}, {"beat": 24, "dur": 1, "midi": 51, "vel": 81}, {"beat": 25, "dur": 1, "midi": 51, "vel": 70}, {"beat": 25.575, "dur": 0.5, "midi": 51, "vel": 60}, {"beat": 26, "dur": 1, "midi": 51, "vel": 74}, {"beat": 27, "dur": 1, "midi": 51, "vel": 77}, {"beat": 27.575, "dur": 0.5, "midi": 51, "vel": 56}, {"beat": 28, "dur": 1, "midi": 51, "vel": 81}, {"beat": 29, "dur": 1, "midi": 51, "vel": 70}, {"beat": 29.575, "dur": 0.5, "midi": 51, "vel": 52}, {"beat": 30, "dur": 1, "midi": 51, "vel": 75}, {"beat": 31, "dur": 1, "midi": 51, "vel": 73}, {"beat": 31.575, "dur": 0.5, "midi": 51, "vel": 57}]}], "warnings": []}}};
 
     // =====================================================================
-    // DAY 2: STATE MACHINE, VALIDATION & GENERATE MODAL
+    // STATE MACHINE & CORE DEFINITIONS
     // =====================================================================
     const MIN_BPM = 60, MAX_BPM = 200, SPEED_STEP = 3, MAX_TAKES = 5;
     const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
@@ -565,7 +745,7 @@ E|---------------------------------------------------------5-3-0----|
     const clampBpm = (n) => Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(Number(n) || 110)));
 
     const initialState = {
-      phase: 'idle', modalOpen: false, currentTake: 1, takes: [],
+      phase: 'ready', modalOpen: false, currentTake: 1, takes: [INITIAL_TAKE],
       lockedTracks: ['bass'], bpm: 110, baseBpm: 110,
       speedTrainerActive: false, loopCount: 0, metronomeActive: true,
       muteTiers: { low: false, mid: false, high: false },
@@ -626,8 +806,8 @@ E|---------------------------------------------------------5-3-0----|
     const audibleTiers = (s) => ['low', 'mid', 'high'].filter(t => s.ensemble[t] && !s.muteTiers[t]);
     const canGenerate = (s) => s.phase !== 'generating' && activeInstruments(s).length >= 1 && activeInstruments(s).length <= 3;
 
-    // ---------- Validators (same error codes as backend) ----------
-    const CHORD_RE = /^[A-G][#b]?(m|maj|min|dim|aug|sus[24]?|add\d+|\d+)*(\/[A-G][#b]?)?$/;
+    // ---------- Validators ----------
+    const CHORD_RE = /^[A-G][#b]?(m|maj|min|dim|aug|sus[24]?|add\d+|\d+)*(\s*\/[A-G][#b]?)?$/;
     const NASH_RE = /^[b#]?(\d+)(m|maj|min|dim|aug|sus[24]?|add\d+|\d+)*$/;
 
     function validateChords(raw) {
@@ -664,9 +844,216 @@ E|---------------------------------------------------------5-3-0----|
       }
       return { ok: true };
     }
-    window.validateVideo = validateVideo; // used by the upcoming Dubbing & Editing workspace
+    window.validateVideo = validateVideo;
 
-    // ---------- DOM refs ----------
+    // =====================================================================
+    // REAL WEB AUDIO PLAYBACK ENGINE & MIXER
+    // =====================================================================
+    let audioCtx = null;
+    let isPlaying = false;
+    let loopSources = [];
+    let currentLoopData = null;
+    let currentScore = INITIAL_TAKE.payload.score;
+    let loopStartTime = 0;
+    let loopDurationSec = 0;
+    let animFrameId = null;
+    let lastLoopCompleted = -1;
+
+    let masterGainNode = null;
+    const tierGainNodes = { low: null, mid: null, high: null };
+    let metronomeGainNode = null;
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioCtxClass();
+        masterGainNode = audioCtx.createGain();
+        masterGainNode.gain.value = 0.9;
+        masterGainNode.connect(audioCtx.destination);
+
+        ['low', 'mid', 'high'].forEach(t => {
+          tierGainNodes[t] = audioCtx.createGain();
+          tierGainNodes[t].gain.value = state.muteTiers[t] ? 0 : 1;
+          tierGainNodes[t].connect(masterGainNode);
+        });
+
+        metronomeGainNode = audioCtx.createGain();
+        metronomeGainNode.gain.value = state.metronomeActive ? 0.6 : 0;
+        metronomeGainNode.connect(masterGainNode);
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function stopAudioPlayback() {
+      loopSources.forEach(s => {
+        try { s.stop(); s.disconnect(); } catch (_) {}
+      });
+      loopSources = [];
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+      }
+      isPlaying = false;
+      const playBtn = document.getElementById('btn-play-pause');
+      if (playBtn) playBtn.innerText = '▶';
+    }
+
+    function startAudioPlayback(scoreObj, bpmVal) {
+      const ctx = getAudioContext();
+      stopAudioPlayback();
+      if (!scoreObj) return;
+
+      currentScore = scoreObj;
+      const bpmToUse = clampBpm(bpmVal || state.bpm);
+      const loop = RiffsAudio.renderLoop(scoreObj, bpmToUse, ctx.sampleRate);
+      currentLoopData = loop;
+
+      const n = loop.loopSamples;
+      const tail = loop.tailSamples;
+      loopDurationSec = n / loop.sr;
+
+      function makeSeamlessBuffer(rawFloat) {
+        if (!rawFloat) return null;
+        const ab = ctx.createBuffer(1, n, ctx.sampleRate);
+        const d = ab.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = rawFloat[i];
+        for (let i = 0; i < tail; i++) d[i % n] += rawFloat[n + i];
+        return ab;
+      }
+
+      const tStart = ctx.currentTime + 0.05;
+      loopStartTime = tStart;
+      lastLoopCompleted = -1;
+
+      function playTier(floatArr, gainNode) {
+        const ab = makeSeamlessBuffer(floatArr);
+        if (!ab || !gainNode) return;
+        const src = ctx.createBufferSource();
+        src.buffer = ab;
+        src.loop = true;
+        src.loopStart = 0;
+        src.loopEnd = loopDurationSec;
+        src.connect(gainNode);
+        src.start(tStart);
+        loopSources.push(src);
+      }
+
+      playTier(loop.tiers.low, tierGainNodes.low);
+      playTier(loop.tiers.mid, tierGainNodes.mid);
+      playTier(loop.tiers.high, tierGainNodes.high);
+      playTier(loop.click, metronomeGainNode);
+
+      isPlaying = true;
+      const playBtn = document.getElementById('btn-play-pause');
+      if (playBtn) playBtn.innerText = '⏸';
+
+      updateTransportHUD();
+    }
+
+    function updateTransportHUD() {
+      if (!isPlaying || !audioCtx || !currentLoopData) return;
+      const now = audioCtx.currentTime;
+      if (now >= loopStartTime) {
+        const elapsed = now - loopStartTime;
+        const loopIdx = Math.floor(elapsed / loopDurationSec);
+        const posInLoop = elapsed % loopDurationSec;
+        const secPerBeat = 60 / state.bpm;
+        const totalBeats = currentLoopData.bars * currentLoopData.beatsPerBar;
+        const beatTotal = Math.min(totalBeats - 1, Math.floor(posInLoop / secPerBeat));
+        const barNum = Math.floor(beatTotal / currentLoopData.beatsPerBar) + 1;
+        const beatInBar = (beatTotal % currentLoopData.beatsPerBar) + 1;
+
+        const currentBarEl = document.getElementById('current-bar');
+        const currentBeatEl = document.getElementById('current-beat');
+        const barSteps = document.querySelectorAll('.bar-step');
+
+        if (currentBarEl) currentBarEl.innerText = barNum;
+        if (currentBeatEl) currentBeatEl.innerText = beatInBar;
+
+        barSteps.forEach((step, idx) => {
+          step.className = idx === (barNum - 1)
+            ? 'bar-step flex-1 h-full rounded-sm bg-emerald-500 transition-all'
+            : 'bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all';
+        });
+
+        if (loopIdx > lastLoopCompleted && lastLoopCompleted >= 0) {
+          lastLoopCompleted = loopIdx;
+          dispatch({ type: 'LOOP_COMPLETE' });
+          if (state.speedTrainerActive) {
+            startAudioPlayback(currentScore, state.bpm);
+            return;
+          }
+        } else if (lastLoopCompleted === -1) {
+          lastLoopCompleted = 0;
+        }
+      }
+      animFrameId = requestAnimationFrame(updateTransportHUD);
+    }
+
+    function playCountIn() {
+      const ctx = getAudioContext();
+      stopAudioPlayback();
+      const countData = RiffsAudio.renderCountIn(state.bpm, ctx.sampleRate, 4);
+      const ab = ctx.createBuffer(1, countData.length, ctx.sampleRate);
+      ab.getChannelData(0).set(countData);
+
+      const src = ctx.createBufferSource();
+      src.buffer = ab;
+      src.connect(metronomeGainNode);
+
+      const tStart = ctx.currentTime + 0.05;
+      src.start(tStart);
+
+      const currentBarEl = document.getElementById('current-bar');
+      const currentBeatEl = document.getElementById('current-beat');
+      if (currentBarEl) currentBarEl.innerText = 'In';
+      if (currentBeatEl) currentBeatEl.innerText = '1';
+
+      let count = 1;
+      const msPerBeat = (60 / state.bpm) * 1000;
+      const timer = setInterval(() => {
+        count++;
+        if (count <= 4) {
+          if (currentBeatEl) currentBeatEl.innerText = count;
+        } else {
+          clearInterval(timer);
+        }
+      }, msPerBeat);
+
+      const durSec = countData.length / ctx.sampleRate;
+      setTimeout(() => {
+        const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
+        if (activeTake && activeTake.payload && activeTake.payload.score) {
+          startAudioPlayback(activeTake.payload.score, state.bpm);
+        }
+      }, durSec * 1000);
+    }
+
+    function exportAudioWav() {
+      const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
+      if (!activeTake || !activeTake.payload || !activeTake.payload.score) return;
+      const loop = RiffsAudio.renderLoop(activeTake.payload.score, state.bpm, 44100);
+      const mix = RiffsAudio.mixdown(loop, state.muteTiers, 2);
+      const wavBytes = RiffsAudio.encodeWav(mix);
+      const blob = new Blob([wavBytes], { type: 'audio/wav' });
+      const activeKey = activeTake.payload.key || 'Am';
+      const filename = `riff_${activeKey}_${state.bpm}bpm.wav`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // =====================================================================
+    // DOM REFS & RENDERING
+    // =====================================================================
     const $ = (id) => document.getElementById(id);
     const chordsInput = $('input-chords'), chordsError = $('chords-error');
     const btnOpen = $('btn-open-generate');
@@ -674,6 +1061,12 @@ E|---------------------------------------------------------5-3-0----|
     const styleInput = $('input-style'), keySelect = $('select-key'), bpmInput = $('input-bpm');
     const btnConfirm = $('btn-confirm-synthesize');
     const ensembleError = $('ensemble-error');
+    const hudBpm = $('hud-bpm'), bpmVal = $('val-bpm'), bpmSlider = $('slider-bpm');
+    const playBtn = $('btn-play-pause');
+    const countInBtn = $('btn-count-in');
+    const saveBtn = $('btn-save-mp3');
+    const metronomeBtn = $('btn-metronome');
+    const speedTrainerCheck = $('check-speed-trainer');
     let selectedGenres = [];
 
     function showInline(el, input, msg) {
@@ -682,7 +1075,6 @@ E|---------------------------------------------------------5-3-0----|
       if (input) input.setAttribute('aria-invalid', msg ? 'true' : 'false');
     }
 
-    // ---------- Render ----------
     function render() {
       modal.classList.toggle('hidden', !state.modalOpen);
       document.body.classList.toggle('overflow-hidden', state.modalOpen);
@@ -706,8 +1098,58 @@ E|---------------------------------------------------------5-3-0----|
       hudBpm.innerText = state.bpm;
       bpmVal.innerText = state.bpm + ' BPM';
       bpmSlider.value = state.bpm;
-      bpm = state.bpm;
       $('hud-take').innerText = 'Take ' + state.currentTake;
+
+      // Metronome LED update
+      const metronomeLed = $('led-metronome');
+      const metronomeStatus = $('status-metronome');
+      if (metronomeLed && metronomeStatus) {
+        if (state.metronomeActive) {
+          metronomeLed.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] transition-all';
+          metronomeStatus.innerText = 'ON';
+          metronomeStatus.className = 'text-[10px] text-emerald-400 font-bold uppercase mono';
+        } else {
+          metronomeLed.className = 'w-2.5 h-2.5 rounded-full bg-slate-700 transition-all';
+          metronomeStatus.innerText = 'OFF';
+          metronomeStatus.className = 'text-[10px] text-slate-500 font-bold uppercase mono';
+        }
+      }
+
+      // Tier Mute Kill switches update
+      ['low', 'mid', 'high'].forEach(track => {
+        const isMuted = state.muteTiers[track];
+        const led = $(`led-mute-${track}`);
+        const status = $(`status-mute-${track}`);
+        const btn = document.querySelector(`.track-mute-btn[data-track="${track}"]`);
+        if (led && status && btn) {
+          if (isMuted) {
+            led.className = 'w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)] transition-all';
+            status.innerText = 'MUTED';
+            status.className = 'text-[10px] mono text-rose-400 uppercase font-bold';
+            btn.classList.add('border-rose-500/50', 'bg-rose-950/20');
+          } else {
+            led.className = 'w-2 h-2 rounded-full bg-slate-700 transition-all';
+            status.innerText = 'LIVE';
+            status.className = 'text-[10px] mono text-slate-500 uppercase font-semibold';
+            btn.classList.remove('border-rose-500/50', 'bg-rose-950/20');
+          }
+        }
+      });
+
+      // Part lock buttons update
+      document.querySelectorAll('.lock-part-btn').forEach(btn => {
+        const lane = btn.dataset.lane;
+        const isLocked = state.lockedTracks.includes(lane);
+        if (isLocked) {
+          btn.innerHTML = '<span>🔒 Locked</span>';
+          btn.className = 'lock-part-btn text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-mono font-bold';
+        } else {
+          btn.innerHTML = '<span>🔓 Unlock</span>';
+          btn.className = 'lock-part-btn text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 font-mono';
+        }
+      });
+
+      // Take buttons update
       document.querySelectorAll('.take-btn').forEach(b => {
         const id = +b.dataset.take;
         const exists = state.takes.some(t => t.id === id) || (!state.takes.length && id === 1);
@@ -724,10 +1166,11 @@ E|---------------------------------------------------------5-3-0----|
         modalError.classList.add('hidden');
       }
 
-      // Dynamic Chart & Tab rendering for Day 1
-      const activeTake = state.takes.find(t => t.id === state.currentTake);
+      // Active Take view rendering (Tab & Nashville chart)
+      const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
       if (activeTake && activeTake.payload) {
         const payload = activeTake.payload;
+        if (payload.key) $('hud-key').innerText = payload.key;
         if (payload.tab_score) {
           $('view-tab').textContent = payload.tab_score;
         }
@@ -752,26 +1195,105 @@ E|---------------------------------------------------------5-3-0----|
       }
     }
 
-    // ---------- Wire existing controls into the state machine ----------
+    // =====================================================================
+    // EVENT LISTENERS & TRANSPORT WIRE-UP
+    // =====================================================================
+    // Ensemble selectors
     ['low', 'mid', 'high'].forEach(t => {
       $('select-inst-' + t).addEventListener('change', (e) =>
         dispatch({ type: 'SET_ENSEMBLE', tier: t, instrument: e.target.value }));
     });
-    bpmSlider.addEventListener('input', (e) => dispatch({ type: 'SET_BPM', bpm: e.target.value }));
-    $('check-speed-trainer').addEventListener('change', () => dispatch({ type: 'TOGGLE_SPEED_TRAINER' }));
-    metronomeBtn.addEventListener('click', () => dispatch({ type: 'TOGGLE_METRONOME' }));
-    document.querySelectorAll('.track-mute-btn').forEach(b =>
-      b.addEventListener('click', () => dispatch({ type: 'TOGGLE_MUTE', tier: b.dataset.track })));
-    document.querySelectorAll('.lock-part-btn').forEach(b =>
-      b.addEventListener('click', () => dispatch({ type: 'TOGGLE_LOCK', lane: b.dataset.lane })));
-    document.querySelectorAll('.take-btn').forEach(b =>
-      b.addEventListener('click', () => dispatch({ type: 'SELECT_TAKE', take: +b.dataset.take })));
-    playBtn.addEventListener('click', () => dispatch({ type: isPlaying ? 'PLAY' : 'PAUSE' }));
 
-    // ---------- Chords input ----------
+    // Play / Pause Button
+    playBtn.addEventListener('click', () => {
+      if (isPlaying) {
+        stopAudioPlayback();
+        dispatch({ type: 'PAUSE' });
+      } else {
+        const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
+        if (activeTake && activeTake.payload && activeTake.payload.score) {
+          startAudioPlayback(activeTake.payload.score, state.bpm);
+          dispatch({ type: 'PLAY' });
+        }
+      }
+    });
+
+    // Count-In Button
+    if (countInBtn) countInBtn.addEventListener('click', playCountIn);
+
+    // Save MP3 Button
+    if (saveBtn) saveBtn.addEventListener('click', exportAudioWav);
+
+    // BPM Slider
+    bpmSlider.addEventListener('input', (e) => dispatch({ type: 'SET_BPM', bpm: e.target.value }));
+    bpmSlider.addEventListener('change', () => {
+      if (isPlaying && currentScore) {
+        startAudioPlayback(currentScore, state.bpm);
+      }
+    });
+
+    // Speed Trainer Checkbox
+    if (speedTrainerCheck) {
+      speedTrainerCheck.addEventListener('change', () => dispatch({ type: 'TOGGLE_SPEED_TRAINER' }));
+    }
+
+    // Metronome Toggle
+    if (metronomeBtn) {
+      metronomeBtn.addEventListener('click', () => {
+        dispatch({ type: 'TOGGLE_METRONOME' });
+        if (metronomeGainNode && audioCtx) {
+          metronomeGainNode.gain.setValueAtTime(state.metronomeActive ? 0.6 : 0, audioCtx.currentTime);
+        }
+      });
+    }
+
+    // Tier Mute Kill switches
+    document.querySelectorAll('.track-mute-btn').forEach(b => {
+      b.addEventListener('click', () => {
+        const track = b.dataset.track;
+        dispatch({ type: 'TOGGLE_MUTE', tier: track });
+        if (tierGainNodes[track] && audioCtx) {
+          tierGainNodes[track].gain.setValueAtTime(state.muteTiers[track] ? 0 : 1, audioCtx.currentTime);
+        }
+      });
+    });
+
+    // Part Lock Toggles
+    document.querySelectorAll('.lock-part-btn').forEach(b => {
+      b.addEventListener('click', () => dispatch({ type: 'TOGGLE_LOCK', lane: b.dataset.lane }));
+    });
+
+    // Take Selection
+    document.querySelectorAll('.take-btn').forEach(b => {
+      b.addEventListener('click', () => {
+        const takeId = +b.dataset.take;
+        dispatch({ type: 'SELECT_TAKE', take: takeId });
+        const selTake = state.takes.find(t => t.id === takeId);
+        if (selTake && selTake.payload && selTake.payload.score && isPlaying) {
+          startAudioPlayback(selTake.payload.score, state.bpm);
+        }
+      });
+    });
+
+    // Chart Tabs Switching
+    document.querySelectorAll('.chart-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.chart-tab-btn').forEach(b => {
+          b.className = 'chart-tab-btn px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200';
+        });
+        e.target.className = 'chart-tab-btn px-3 py-1 rounded-lg bg-amber-500 text-black font-bold';
+
+        const view = e.target.dataset.view;
+        $('view-nashville').classList.toggle('hidden', view !== 'nashville');
+        $('view-tab').classList.toggle('hidden', view !== 'tab');
+        $('view-sheet').classList.toggle('hidden', view !== 'sheet');
+      });
+    });
+
+    // Chords Input
     chordsInput.addEventListener('input', () => showInline(chordsError, chordsInput, ''));
 
-    // ---------- Open / close modal ----------
+    // Modal Opening & Closing
     let lastFocus = null;
     function openModal() {
       const v = validateChords(chordsInput.value);
@@ -802,7 +1324,7 @@ E|---------------------------------------------------------5-3-0----|
     document.addEventListener('keydown', (e) => {
       if (!state.modalOpen) return;
       if (e.key === 'Escape') { closeModal(); return; }
-      if (e.key === 'Tab') { // focus trap
+      if (e.key === 'Tab') {
         const f = [...modal.querySelectorAll('button, input, select, textarea')].filter(el => !el.disabled && el.offsetParent !== null);
         if (!f.length) return;
         const first = f[0], last = f[f.length - 1];
@@ -811,7 +1333,7 @@ E|---------------------------------------------------------5-3-0----|
       }
     });
 
-    // ---------- Genre chips (max 2) ----------
+    // Genre Chips Selection
     $('genre-chips').addEventListener('click', (e) => {
       const chip = e.target.closest('[data-genre]');
       if (!chip) return;
@@ -831,9 +1353,9 @@ E|---------------------------------------------------------5-3-0----|
       }
     });
 
-    // ---------- Confirm & Synthesize ----------
     bpmInput.addEventListener('blur', () => { bpmInput.value = clampBpm(bpmInput.value); });
 
+    // Confirm & Synthesize (Generates Take via /api/generate)
     btnConfirm.addEventListener('click', async () => {
       const chords = validateChords(chordsInput.value);
       if (!chords.ok) { dispatch({ type: 'GENERATE_FAIL', error: chords }); return; }
@@ -850,6 +1372,10 @@ E|---------------------------------------------------------5-3-0----|
 
       const promptText = [styleInput.value.trim(), ...selectedGenres].filter(Boolean).join(' | ')
         || 'Funky neo-soul pocket with driving bass';
+      const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
+      const prevScore = activeTake && activeTake.payload ? activeTake.payload.score : null;
+      const nextSeed = state.takes.length + 1;
+
       const payload = {
         prompt: promptText,
         key: keySelect.value,
@@ -857,6 +1383,8 @@ E|---------------------------------------------------------5-3-0----|
         chords: chordsInput.value.trim(),
         instruments,
         locked_parts: state.lockedTracks,
+        seed: nextSeed,
+        previous_score: prevScore,
       };
 
       dispatch({ type: 'GENERATE_START' });
@@ -876,7 +1404,7 @@ E|---------------------------------------------------------5-3-0----|
         let json = {};
         try { json = await res.json(); } catch (_) {}
         const d = (json && json.data) || {};
-        dispatch({ type: 'GENERATE_SUCCESS', data: {
+        const newTakeData = {
           key: d.key || payload.key,
           bpm: d.bpm || payload.bpm,
           chords: d.chords || (payload.chords ? payload.chords.split(/[\s,|\-–—]+/).filter(Boolean) : []),
@@ -884,31 +1412,22 @@ E|---------------------------------------------------------5-3-0----|
           tab_score: d.tab_score || '',
           stems: d.stems || [],
           license_certificate: d.license_certificate || null,
-        }});
-        $('hud-key').innerText = (d.key || payload.key);
+          seed: d.seed || nextSeed,
+          score: d.score || null,
+        };
+        dispatch({ type: 'GENERATE_SUCCESS', data: newTakeData });
+        $('hud-key').innerText = newTakeData.key;
+
+        if (isPlaying && newTakeData.score) {
+          startAudioPlayback(newTakeData.score, newTakeData.bpm);
+        }
       } catch (_) {
         dispatch({ type: 'GENERATE_FAIL', error: { code: 'NETWORK', message: "Couldn't reach the band. Try again." } });
       }
     });
 
-    // Save MP3 Download Handler
-    $('btn-save-mp3').addEventListener('click', () => {
-      const activeTake = state.takes.find(t => t.id === state.currentTake);
-      const activeKey = activeTake ? activeTake.payload.key : 'Am';
-      const filename = `riff_${activeKey}_${state.bpm}bpm.mp3`;
-      const blob = new Blob(["RIFFs 320kbps Multisampled Audio Stream"], { type: "audio/mpeg" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    });
-
+    // Initialize View & Transport
     render();
   </script>
-
 </body>
 </html>

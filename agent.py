@@ -3,6 +3,8 @@ import re
 import json
 import hashlib
 from typing import List, Dict, Any, Optional
+
+from composer import compose
 # Load secrets from .env if dotenv is installed
 try:
     from dotenv import load_dotenv
@@ -136,30 +138,45 @@ class RiffsAgent:
         bpm: int = 110,
         chords: str = "Am - F - C - G",
         instruments: Optional[List[str]] = None,
-        locked_parts: Optional[List[str]] = None
+        locked_parts: Optional[List[str]] = None,
+        seed: Optional[int] = None,
+        previous_score: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Executes Day 1 symbolic blueprint generation with part-locking.
+        Executes symbolic blueprint generation with part-locking.
+
+        The notes are written first (`score`); the browser renders them to sound.
+        Locked lanes are copied verbatim from `previous_score` (or, when omitted,
+        from this agent's most recent take), so they cannot drift between takes.
         """
         instruments = instruments or ["bass_guitar", "rhythm_guitar", "cymbals"]
         locked_parts = locked_parts or []
         bpm = max(60, min(200, int(bpm or 110)))
         key = key or "Am"
+        seed = int(seed) if seed is not None else len(self.take_history) + 1
 
         parsed_chords = parse_chord_tokens(chords)
         nashville_chart = calculate_nashville_numbers(parsed_chords, key)
         tab_score = generate_tab_score(parsed_chords)
 
+        if previous_score is None and self.take_history:
+            previous_score = self.take_history[-1]["data"].get("score")
+        score = compose(
+            parsed_chords, key, instruments, prompt=prompt, seed=seed,
+            locked_parts=locked_parts, previous_score=previous_score,
+        )
+
         # Build stems
         stems = []
-        for inst in instruments:
+        for lane in score["lanes"]:
+            inst = lane["instrument"]
             safe_inst = re.sub(r"[^a-zA-Z0-9_]", "_", inst)
-            is_locked = inst in locked_parts or any(lp in inst for lp in locked_parts)
             stems.append({
                 "lane": inst,
                 "filename": f"riff_{key}_{bpm}bpm_{safe_inst}.wav",
-                "locked": is_locked
+                "locked": lane["locked"]
             })
+
 
         # Generate License Certificate
         cert_hash = hashlib.sha256(f"{key}:{bpm}:{chords}:{','.join(instruments)}".encode()).hexdigest()[:8].upper()
@@ -205,7 +222,9 @@ class RiffsAgent:
             "nashville_chart": nashville_chart,
             "tab_score": tab_score,
             "stems": stems,
-            "license_certificate": license_cert
+            "license_certificate": license_cert,
+            "seed": seed,
+            "score": score
         }
 
         if claude_enhancement:
