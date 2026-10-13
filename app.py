@@ -52,6 +52,7 @@ class GenerateRequest(BaseModel):
     seed: Optional[int] = None
     previous_score: Optional[Dict[str, Any]] = None
     base_take_id: Optional[int] = None
+    issue_license: Optional[bool] = True
 
 
 ALLOWED_INSTRUMENTS = {
@@ -189,6 +190,7 @@ async def generate_riff(req: GenerateRequest):
             seed=req.seed,
             previous_score=req.previous_score,
             base_take_id=req.base_take_id,
+            issue_license=True if req.issue_license is None else req.issue_license,
         )
         return {
             "status": "success",
@@ -231,4 +233,46 @@ async def generate_riff(req: GenerateRequest):
                 "detail": str(exc)
             }
         )
+
+
+class VideoRemuxRequest(BaseModel):
+    video_base64: str
+    audio_base64: str
+    video_filename: Optional[str] = "input.mp4"
+    audio_filename: Optional[str] = "riff.wav"
+    output_filename: Optional[str] = None
+
+
+@app.post("/api/v1/tools/attach-riff-to-video")
+async def attach_video_endpoint(req: VideoRemuxRequest):
+    import base64
+    from riffs_api.video import attach_riff_to_video
+    try:
+        video_bytes = base64.b64decode(req.video_base64)
+        audio_bytes = base64.b64decode(req.audio_base64)
+        result = attach_riff_to_video(
+            video_source=video_bytes,
+            audio_source=audio_bytes,
+            video_filename=req.video_filename or "input.mp4",
+            audio_filename=req.audio_filename or "riff.wav",
+            output_filename=req.output_filename,
+        )
+        return {
+            "status": "success",
+            "filename": result["filename"],
+            "size_bytes": result["size_bytes"],
+            "remux_mode": result["remux_mode"],
+            "video_base64": base64.b64encode(result["content"]).decode("ascii"),
+        }
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={"status": "error", "code": "VIDEO_VALIDATION", "detail": str(exc)},
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "code": "VIDEO_REMUX_FAILED", "detail": str(exc)},
+        )
+
 

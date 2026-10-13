@@ -1,16 +1,22 @@
 import os
-from dotenv import load_dotenv
-import litellm
 
-# 1. Load environment variables from .env
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
-api_key = os.getenv("ANTHROPIC_API_KEY")
-if not api_key:
-    raise ValueError("Missing ANTHROPIC_API_KEY in .env file. Please check your setup.")
+try:
+    import litellm
+except ImportError:
+    litellm = None
 
 # 2. Test Claude connection using LiteLLM per coach instructions
 def test_claude_connection():
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        print("Missing ANTHROPIC_API_KEY in .env file. Please check your setup.")
+        return False
     print("Testing connection to Anthropic Claude (anthropic/claude-sonnet-5-5)...")
     try:
         response = litellm.completion(

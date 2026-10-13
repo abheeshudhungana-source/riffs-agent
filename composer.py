@@ -123,6 +123,28 @@ _PRESETS = {
              "comp": ["straight8", "straight8", "halfs"], "cym": "hat8", "kick": ["four", "sync"]},
     "lofi": {"swing": 0.35, "vel_scale": 0.82, "bass": ["half", "sync", "pedal"],
              "comp": ["whole", "offbeat", "halfs"], "cym": "ride_quarters", "kick": ["half", "sync"]},
+    "funk": {"swing": 0.20, "vel_scale": 1.05, "bass": ["slap", "sync", "octave"],
+             "comp": ["funk16", "sync", "offbeat"], "cym": "funk_cym", "kick": ["funk_kick", "sync"]},
+    "jazz": {"swing": 0.65, "vel_scale": 0.90, "bass": ["walk", "walk", "root_five"],
+             "comp": ["offbeat", "sync", "halfs"], "cym": "ride_swing", "kick": ["half", "sync"]},
+    "bossa": {"swing": 0.05, "vel_scale": 0.88, "bass": ["bossa", "half", "root_five"],
+              "comp": ["bossa_comp", "offbeat", "halfs"], "cym": "bossa_cym", "kick": ["bossa_kick", "half"]},
+    "latin": {"swing": 0.05, "vel_scale": 0.92, "bass": ["bossa", "sync", "octave"],
+              "comp": ["bossa_comp", "sync", "funk16"], "cym": "bossa_cym", "kick": ["bossa_kick", "sync"]},
+    "reggae": {"swing": 0.35, "vel_scale": 0.95, "bass": ["reggae", "half", "pedal"],
+               "comp": ["reggae_skank", "offbeat", "halfs"], "cym": "one_drop", "kick": ["one_drop_kick", "half"]},
+    "dub": {"swing": 0.35, "vel_scale": 0.90, "bass": ["reggae", "pedal", "half"],
+            "comp": ["reggae_skank", "whole"], "cym": "one_drop", "kick": ["one_drop_kick", "half"]},
+    "blues": {"swing": 0.85, "vel_scale": 0.98, "bass": ["walk", "root_five", "half"],
+              "comp": ["shuffle", "offbeat", "halfs"], "cym": "ride_swing", "kick": ["half", "sync"]},
+    "ballad": {"swing": 0.0, "vel_scale": 0.82, "bass": ["half", "pedal", "root_five"],
+               "comp": ["arpeggio", "whole", "halfs"], "cym": "ride_quarters", "kick": ["half", "sync"]},
+    "pop": {"swing": 0.0, "vel_scale": 0.98, "bass": ["rock8", "root_five", "sync"],
+            "comp": ["straight8", "sync", "halfs"], "cym": "hat8", "kick": ["four", "sync"]},
+    "disco": {"swing": 0.0, "vel_scale": 1.05, "bass": ["octave", "rock8", "sync"],
+              "comp": ["offbeat", "funk16", "straight8"], "cym": "hat8", "kick": ["four", "sync"]},
+    "metal": {"swing": 0.0, "vel_scale": 1.15, "bass": ["rock8", "rock8", "sync"],
+              "comp": ["straight8", "straight8", "halfs"], "cym": "hat8", "kick": ["four", "sync"]},
 }
 _DEFAULT_FEEL = {"swing": 0.15, "vel_scale": 1.0, "bass": ["root_five", "sync", "half"],
                  "comp": ["straight8", "sync", "offbeat"], "cym": "hat8", "kick": ["four", "sync"]}
@@ -132,16 +154,44 @@ def parse_feel(prompt: Optional[str]) -> Dict[str, Any]:
     text = (prompt or "").lower()
     feel = dict(_DEFAULT_FEEL)
     tags: List[str] = []
-    if "neo" in text or "soul" in text:
+    if "funk" in text or "slap" in text:
+        feel.update(_PRESETS["funk"]); tags.append("funk")
+    elif "jazz" in text or "bebop" in text or "swing" in text:
+        feel.update(_PRESETS["jazz"]); tags.append("jazz")
+    elif "bossa" in text or "samba" in text:
+        feel.update(_PRESETS["bossa"]); tags.extend(["bossa", "bossa-nova"])
+    elif "latin" in text:
+        feel.update(_PRESETS["latin"]); tags.append("latin")
+    elif "reggae" in text or "one drop" in text or "skank" in text:
+        feel.update(_PRESETS["reggae"]); tags.append("reggae")
+    elif "dub" in text:
+        feel.update(_PRESETS["dub"]); tags.append("dub")
+    elif "blues" in text:
+        feel.update(_PRESETS["blues"]); tags.append("blues")
+    elif "ballad" in text or "ambient" in text:
+        feel.update(_PRESETS["ballad"]); tags.append("ballad")
+    elif "disco" in text or "dance" in text:
+        feel.update(_PRESETS["disco"]); tags.append("disco")
+    elif "metal" in text or "heavy" in text:
+        feel.update(_PRESETS["metal"]); tags.append("metal")
+    elif "neo" in text or "soul" in text:
         feel.update(_PRESETS["neo"]); tags.append("neo-soul")
-    if "shuffle" in text or "halftime" in text:
+    elif "shuffle" in text or "halftime" in text:
         feel.update(_PRESETS["shuffle"]); tags.append("halftime-shuffle")
-    if "rock" in text or "indie" in text:
+    elif "rock" in text or "indie" in text:
         feel.update(_PRESETS["rock"]); tags.append("indie-rock")
-    if "lo-fi" in text or "lofi" in text or "lo fi" in text:
+    elif "lo-fi" in text or "lofi" in text or "lo fi" in text:
         feel.update(_PRESETS["lofi"]); tags.append("lo-fi")
+    elif "pop" in text:
+        feel.update(_PRESETS["pop"]); tags.append("pop")
+
     if "walking" in text:
-        feel["bass"] = ["walk", "walk", "root_five"]; tags.append("walking-bass")
+        feel["bass"] = ["walk", "walk", "root_five"]
+        tags.append("walking-bass")
+    if "pocket" in text and "pocket" not in tags:
+        feel["swing"] = max(feel.get("swing", 0), 0.25)
+        tags.append("pocket")
+
     feel["tags"] = tags
     return feel
 
@@ -207,6 +257,10 @@ _BASS_TEMPLATES = {
     "rock8": [(i * 0.5, 0.5, "r", 98 if i % 2 == 0 else 80) for i in range(8)],
     "half": [(0, 2.5, "r", 100), (3, 0.5, "5", 78), (3.5, 0.5, "a", 74)],
     "pedal": [(0, 3.5, "r", 96), (3.5, 0.5, "a", 70)],
+    "slap": [(0, 0.75, "r", 108), (0.75, 0.5, "r", 82), (1.5, 0.5, "5", 98), (2.0, 0.75, "r", 104), (2.75, 0.5, "3", 90), (3.5, 0.5, "a", 84)],
+    "bossa": [(0, 1.5, "r", 96), (1.5, 0.5, "5", 86), (2.0, 1.0, "r", 92), (3.0, 1.0, "5", 88)],
+    "reggae": [(1.0, 1.0, "r", 104), (2.5, 0.5, "r", 88), (3.0, 1.0, "5", 96)],
+    "octave": [(0, 0.5, "r", 98), (0.5, 0.5, "r", 84), (1.0, 0.5, "5", 94), (1.5, 0.5, "5", 82), (2.0, 0.5, "r", 98), (2.5, 0.5, "r", 84), (3.0, 0.5, "5", 94), (3.5, 0.5, "a", 88)],
 }
 
 
@@ -250,6 +304,10 @@ _COMP_TEMPLATES = {
     "whole": [(0, 4, 88)],
     "halfs": [(0, 2, 92), (2, 2, 84)],
     "shuffle": [(0, .5, 94), (.5, .5, 58), (1, .5, 84), (2, .5, 92), (2.5, .5, 58), (3, .5, 84)],
+    "funk16": [(0, .25, 96), (.5, .25, 82), (.75, .5, 90), (1.5, .25, 88), (2, .5, 94), (2.75, .5, 84), (3.5, .5, 90)],
+    "reggae_skank": [(1, .5, 94), (1.5, .5, 76), (3, .5, 96), (3.5, .5, 78)],
+    "bossa_comp": [(0, .75, 90), (1, .5, 82), (1.75, .75, 88), (2.75, .5, 86), (3.5, .5, 82)],
+    "arpeggio": [(0, 1, 90), (1, 1, 84), (2, 1, 88), (3, 1, 82)],
 }
 _COMP_RANGE = {"rhythm_guitar": (52, 72, 5), "acoustic_piano": (55, 74, 4), "ukulele": (60, 76, 4)}
 
@@ -340,6 +398,9 @@ _CYM_PATTERNS = {
     "hat8": [(i * 0.5, 0.25, 42, 88 if i % 2 == 0 else 62) for i in range(8)],
     "ride_swing": [(0, 1, 51, 88), (1, 1, 51, 78), (1.5, 0.5, 51, 62), (2, 1, 51, 86), (3, 1, 51, 78), (3.5, 0.5, 51, 62)],
     "ride_quarters": [(0, 1, 51, 82), (1, 1, 51, 70), (2, 1, 51, 80), (3, 1, 51, 70)],
+    "funk_cym": [(i * 0.25, 0.2, 42, 94 if i % 4 == 0 else (78 if i % 2 == 0 else 58)) for i in range(16)],
+    "bossa_cym": [(0, 0.5, 42, 86), (0.75, 0.5, 42, 74), (1.5, 0.5, 42, 84), (2.25, 0.5, 42, 76), (3.0, 0.5, 42, 86), (3.75, 0.25, 42, 72)],
+    "one_drop": [(1.0, 0.5, 42, 86), (2.0, 1.0, 51, 98), (3.0, 0.5, 42, 86)],
 }
 
 
@@ -364,6 +425,9 @@ _KICK_PATTERNS = {
     "four": [(0, 98), (1, 82), (2, 94), (3, 82)],
     "sync": [(0, 100), (1.5, 80), (2.5, 90)],
     "half": [(0, 100), (2.75, 84)],
+    "funk_kick": [(0, 102), (0.75, 84), (1.75, 88), (2.5, 94)],
+    "bossa_kick": [(0, 92), (1.5, 84), (2.0, 90), (3.5, 82)],
+    "one_drop_kick": [(2.0, 102)],
 }
 
 
@@ -544,3 +608,99 @@ def compose(
 
 def _bar_summary(bars: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [{"bar": i + 1, "chord": c["symbol"]} for i, c in enumerate(bars)]
+
+
+_CHORD_TOKEN_REGEX = re.compile(
+    r"^(?:"
+    r"[A-G][#b]?(?:maj|min|m|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?"
+    r"|"
+    r"[b#]?(?:[1-7]|vii|vi|iv|v|iii|ii|i)(?:maj|min|m|dim|aug|sus|add)?\d*(?:/[b#]?(?:[1-7]|vii|vi|iv|v|iii|ii|i))?"
+    r")$",
+    re.IGNORECASE,
+)
+
+
+def extract_musical_intent_from_prompt(
+    prompt: Optional[str],
+    current_key: Optional[str] = None,
+    current_bpm: Optional[int] = None,
+    current_chords: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Day 4 Prompt Co-Pilot:
+    Extracts key, BPM, chord progression, and feel directly from natural language prompts.
+    """
+    text = (prompt or "").strip()
+    feel = parse_feel(text)
+    inferred_key = current_key
+    inferred_bpm = current_bpm
+    inferred_chords = None
+
+    if text:
+        # 1. Key extraction (e.g. "in G Major", "in Dm", "key: C", "key of Am")
+        key_match = re.search(
+            r"(?:in|key(?:\s+of)?[:\s]+)\s*([A-G][#b]?(?:maj|min|minor|major|m)?)\b",
+            text,
+            re.IGNORECASE,
+        )
+        if key_match:
+            raw_k = key_match.group(1).strip()
+            if re.search(r"minor|min\b", raw_k, re.IGNORECASE):
+                root_m = re.match(r"^[A-G][#b]?", raw_k, re.IGNORECASE)
+                if root_m:
+                    root = root_m.group(0)
+                    inferred_key = f"{root.upper()}m" if len(root) == 1 else f"{root[0].upper()}{root[1:]}m"
+            elif re.search(r"major|maj\b", raw_k, re.IGNORECASE):
+                root_m = re.match(r"^[A-G][#b]?", raw_k, re.IGNORECASE)
+                if root_m:
+                    root = root_m.group(0)
+                    inferred_key = root.upper() if len(root) == 1 else f"{root[0].upper()}{root[1:]}"
+            else:
+                inferred_key = raw_k[0].upper() + raw_k[1:]
+
+        # 2. BPM extraction (e.g. "110 BPM", "at 92 bpm", "tempo: 120")
+        bpm_match = re.search(
+            r"(\d{2,3})\s*(?:bpm|tempo)\b|\b(?:bpm|tempo)[:\s]+(\d{2,3})\b",
+            text,
+            re.IGNORECASE,
+        )
+        if bpm_match:
+            bpm_val = int(bpm_match.group(1) or bpm_match.group(2))
+            if 40 <= bpm_val <= 240:
+                inferred_bpm = max(60, min(200, bpm_val))
+
+        # 3. Chord progression extraction
+        prog_match = re.search(
+            r"(?:like|progression[:\s]+|chords?[:\s]+)([\w#b\s,\-–—/|]+?)(?=(?:\.|\bin\b|\bat\b|$))",
+            text,
+            re.IGNORECASE,
+        )
+        candidate_segment = prog_match.group(1) if prog_match else text
+        tokens = [t.strip() for t in re.split(r"[\s,|\-–—]+", candidate_segment) if t.strip()]
+
+        valid_chords: List[str] = []
+        for t in tokens:
+            if _CHORD_TOKEN_REGEX.match(t):
+                if t.upper() in {"A", "I"} and len(tokens) < 3 and not prog_match:
+                    continue
+                valid_chords.append(t)
+            elif valid_chords and len(valid_chords) >= 2:
+                break
+
+        if len(valid_chords) >= 2:
+            inferred_chords = valid_chords
+            if not inferred_key:
+                last_chord = valid_chords[-1]
+                match_last = _CHORD_RE.match(last_chord)
+                if match_last and match_last.group(1):
+                    inferred_key = match_last.group(1)
+
+    return {
+        "key": inferred_key or current_key or "Am",
+        "bpm": inferred_bpm or current_bpm or 110,
+        "chords": inferred_chords or (
+            [t.strip() for t in re.split(r"[\s,|\-–—]+", current_chords) if t.strip()]
+            if current_chords else ["Am", "F", "C", "G"]
+        ),
+        "feel": feel,
+    }

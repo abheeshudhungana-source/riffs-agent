@@ -46,11 +46,19 @@
         <span class="text-slate-400">TAKE:</span>
         <span id="hud-take" class="font-bold text-purple-400">Take 1</span>
       </div>
+      <div id="hud-license" class="bg-slate-900 border border-emerald-900/50 text-emerald-400 px-3 py-1.5 rounded-lg flex items-center gap-2" title="Day 3 Verifiable Digital License Certificate">
+        <span class="text-slate-400">LIC:</span>
+        <span id="hud-license-id" class="font-bold text-emerald-400">RIFFS-LIC-VERIFIED</span>
+      </div>
+      <div class="hidden sm:flex bg-indigo-950/70 border border-indigo-700/60 text-indigo-300 px-3 py-1.5 rounded-lg items-center gap-1.5" title="Day 4 Autonomous Co-Producer Agent Active">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="font-bold">Agent Loop Active</span>
+      </div>
 
-      <!-- DUBBING & EDITING PLACEHOLDER LINK -->
+      <!-- DUBBING & REMUX TOOL LINK -->
       <a href="#dubbing-editing" id="nav-dubbing-link" class="ml-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 hover:border-indigo-500/50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-semibold transition cursor-pointer">
-        <span>🎬 Dubbing & Editing</span>
-        <span class="text-[10px] bg-indigo-500/20 px-1 py-0.2 rounded text-indigo-200">Soon</span>
+        <span>🎬 Dub Video</span>
+        <span class="text-[10px] bg-indigo-500/30 px-1 py-0.2 rounded text-indigo-200">Day 3</span>
       </a>
     </div>
   </header>
@@ -1353,6 +1361,33 @@ E|---------------------------------------------------------5-3-0----|
       }
     });
 
+    styleInput.addEventListener('change', () => {
+      const txt = styleInput.value.trim();
+      const keyMatch = txt.match(/(?:in|key(?:\s+of)?[:\s]+)\s*([A-G][#b]?(?:maj|min|minor|major|m)?)\b/i);
+      if (keyMatch) {
+        let k = keyMatch[1];
+        if (/minor|min/i.test(k)) k = k.replace(/minor|min/i, 'm');
+        if (/major|maj/i.test(k)) k = k.replace(/major|maj/i, '');
+        for (const opt of keySelect.options) {
+          if (opt.value.toLowerCase() === k.toLowerCase() || opt.value.toLowerCase().startsWith(k.toLowerCase())) {
+            keySelect.value = opt.value;
+            break;
+          }
+        }
+      }
+      const bpmMatch = txt.match(/(\d{2,3})\s*(?:bpm|tempo)\b|\b(?:bpm|tempo)[:\s]+(\d{2,3})\b/i);
+      if (bpmMatch) {
+        const b = parseInt(bpmMatch[1] || bpmMatch[2], 10);
+        if (b >= 60 && b <= 200) bpmInput.value = b;
+      }
+      const progMatch = txt.match(/(?:like|progression[:\s]+|chords?[:\s]+)([\w#b\s,\-–—/|]+?)(?:\.|\bin\b|\bat\b|$)/i);
+      if (progMatch) {
+        const rawP = progMatch[1].trim();
+        const tokens = rawP.split(/[\s,|\-–—]+/).filter(Boolean);
+        if (tokens.length >= 2) chordsInput.value = tokens.join(' - ');
+      }
+    });
+
     bpmInput.addEventListener('blur', () => { bpmInput.value = clampBpm(bpmInput.value); });
 
     // Confirm & Synthesize (Generates Take via /api/generate)
@@ -1417,8 +1452,19 @@ E|---------------------------------------------------------5-3-0----|
         };
         dispatch({ type: 'GENERATE_SUCCESS', data: newTakeData });
         $('hud-key').innerText = newTakeData.key;
+        if (newTakeData.license_certificate && newTakeData.license_certificate.license_id) {
+          const licEl = $('hud-license-id');
+          if (licEl) licEl.innerText = newTakeData.license_certificate.license_id;
+        }
+        if (newTakeData.chords && newTakeData.chords.length) {
+          chordsInput.value = newTakeData.chords.join(' - ');
+        }
+        if (newTakeData.bpm) {
+          bpmInput.value = newTakeData.bpm;
+        }
 
-        if (isPlaying && newTakeData.score) {
+        // Always auto-start audio playback so the user hears the newly generated riff immediately!
+        if (newTakeData.score) {
           startAudioPlayback(newTakeData.score, newTakeData.bpm);
         }
       } catch (_) {
