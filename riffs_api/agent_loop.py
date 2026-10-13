@@ -8,6 +8,7 @@ from typing import Any
 from zipfile import ZipFile
 
 from riffs_api.progression import ProgressionError, parse_progression
+from riffs_api.prompt_guardrails import PromptRefusal, validate_prompt
 from riffs_api.render import render_symbolic_package, symbolic_package_filename
 from riffs_api.score import draft_score
 
@@ -15,7 +16,7 @@ from riffs_api.score import draft_score
 class RiffBuildEnvironment:
     """State and allowlisted actions for drafting a symbolic RIFF package."""
 
-    def __init__(self, progression: str, key: str | None, tempo_bpm: int):
+    def __init__(self, progression: str, key: str | None, tempo_bpm: int, prompt: str = ""):
         self.progression = progression
         self.key = key
         self.tempo_bpm = tempo_bpm
@@ -25,12 +26,22 @@ class RiffBuildEnvironment:
         self.status = "ready"
         self.error: str | None = None
         self.clarification: dict[str, Any] | None = None
+        self.flag: str | None = None
+        self.refusal_code: str | None = None
+        self.alternative: str | None = None
+        try:
+            validate_prompt(prompt)
+        except PromptRefusal as exc:
+            self.status = "unsafe_request"
+            self.flag = exc.detail
+            self.refusal_code = exc.code
+            self.alternative = exc.alternative
 
     def get_state(self) -> dict[str, Any]:
         """Return a JSON-ready snapshot for the policy to inspect."""
         return {
             "status": self.status,
-            "done": self.status in {"completed", "failed", "awaiting_input"},
+            "done": self.status in {"completed", "failed", "awaiting_input", "refused"},
             "input": {
                 "progression": self.progression,
                 "key": self.key,
@@ -41,6 +52,9 @@ class RiffBuildEnvironment:
             "export": self.export,
             "error": self.error,
             "clarification": self.clarification,
+            "flag": self.flag,
+            "refusal_code": self.refusal_code,
+            "alternative": self.alternative,
         }
 
     def step(self, action: str, args: dict[str, Any]) -> dict[str, Any]:
@@ -101,6 +115,14 @@ def observe(env: RiffBuildEnvironment) -> dict[str, Any]:
 def decide(state: dict[str, Any], history: list[dict[str, Any]]) -> dict[str, Any]:
     """Choose the next deterministic step from the latest observation."""
     del history  # The current policy is state-driven and has no hidden memory.
+    if state["status"] == "unsafe_request":
+        return {
+            "action": "refuse",
+            "args": {
+                "reason": state["flag"],
+                "alternative": state.get("alternative") or "offer a safe, original progression",
+            },
+        }
     if state["status"] == "parse_failed":
         return {
             "action": "request_clarification",
@@ -129,6 +151,20 @@ def act(env: RiffBuildEnvironment, decision: dict[str, Any]) -> dict[str, Any]:
             "ok": True,
             "action": action,
             "reason": reason,
+            "done": True,
+        }
+    if action == "refuse":
+        args = decision.get("args") or {}
+        reason = str(args.get("reason") or "The request is outside RIFFs' instrumental scope.")
+        alternative = str(args.get("alternative") or "Offer a safe, original progression.")
+        env.flag = reason
+        env.alternative = alternative
+        env.status = "refused"
+        return {
+            "ok": True,
+            "action": action,
+            "reason": reason,
+            "alternative": alternative,
             "done": True,
         }
     return env.step(action, decision.get("args") or {})

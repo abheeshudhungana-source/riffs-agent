@@ -76,4 +76,4 @@ These checks are a deterministic ingress baseline, not a musical copyright detec
 
 ## Observable symbolic agent loop
 
-`POST /api/v1/agent/run` records each observation, state-based decision, action result, and post-action observation while parsing a progression, drafting a score, and exporting the symbolic package. A parse failure is observed as `parse_failed`; the policy then records a `request_clarification` action and ends in `awaiting_input`. The route caps the loop at five steps. Its policy is deterministic and does not use an LLM.
+`POST /api/v1/agent/run` records each observation, state-based decision, action result, and post-action observation while parsing a progression, drafting a score, and exporting the symbolic package. An optional prompt is checked before parsing; an unsafe request is observed as `unsafe_request`, then the policy records a `refuse` action and ends in `refused` without drafting. A parse failure is observed as `parse_failed`; the policy then records a `request_clarification` action and ends in `awaiting_input`. The route caps the loop at five steps. Its policy is deterministic and does not use an LLM.
