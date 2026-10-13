@@ -3,7 +3,10 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from riffs_api.progression import ProgressionError
+from riffs_api.routes import router as riff_routes
+from riffs_api.prompt_guardrails import PromptRefusal
 
 # Import the RIFFs agent harness
 try:
@@ -18,6 +21,7 @@ app = FastAPI(
     description="Autonomous AI Practice & Sketching Partner for Musicians (Day 1 Milestone)",
     version="0.1.0"
 )
+app.include_router(riff_routes)
 
 # Root route serves the interactive prototype
 @app.get("/", response_class=HTMLResponse)
@@ -43,10 +47,29 @@ class GenerateRequest(BaseModel):
     key: Optional[str] = "Am"
     bpm: Optional[int] = 110
     chords: Optional[str] = "Am - F - C - G"
-    instruments: Optional[List[str]] = ["bass_guitar", "rhythm_guitar", "cymbals"]
-    locked_parts: Optional[List[str]] = []
+    instruments: Optional[List[str]] = Field(default_factory=lambda: ["bass_guitar", "rhythm_guitar", "cymbals"])
+    locked_parts: Optional[List[str]] = Field(default_factory=list)
     seed: Optional[int] = None
     previous_score: Optional[Dict[str, Any]] = None
+    base_take_id: Optional[int] = None
+
+
+ALLOWED_INSTRUMENTS = {
+    "bass_guitar", "contrabass", "bass_drums", "floor_tom",
+    "bongos", "rhythm_guitar", "acoustic_piano", "tenor_sax",
+    "cymbals", "triangle", "ukulele", "piccolo",
+}
+INSTRUMENT_TIERS = {
+    "bass_guitar": "low", "contrabass": "low", "bass_drums": "low", "floor_tom": "low",
+    "bongos": "mid", "rhythm_guitar": "mid", "acoustic_piano": "mid", "tenor_sax": "mid",
+    "cymbals": "high", "triangle": "high", "ukulele": "high", "piccolo": "high",
+}
+LOCK_ALIASES = {
+    "bass": {"bass_guitar", "contrabass", "bass_drums"},
+    "rhythm": {"rhythm_guitar", "acoustic_piano", "ukulele"},
+    "lead": {"tenor_sax", "piccolo"},
+    "drums": {"bass_drums", "floor_tom", "bongos", "cymbals", "triangle"},
+}
 
 @app.post("/api/generate")
 async def generate_riff(req: GenerateRequest):
@@ -60,6 +83,58 @@ async def generate_riff(req: GenerateRequest):
                 "code": "INSTRUMENT_COUNT",
                 "detail": "Select 1 to 3 instruments (1 per tier)."
             }
+        )
+
+    unsupported = sorted(set(instruments) - ALLOWED_INSTRUMENTS)
+    if unsupported:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": "UNSUPPORTED_INSTRUMENT",
+                "detail": f"Unsupported instrument selection: {', '.join(unsupported)}.",
+            },
+        )
+
+    if len(set(instruments)) != len(instruments):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": "DUPLICATE_INSTRUMENT",
+                "detail": "Choose each instrument only once.",
+            },
+        )
+
+    selected_tiers = [INSTRUMENT_TIERS[instrument] for instrument in instruments]
+    if len(set(selected_tiers)) != len(selected_tiers):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": "INSTRUMENT_TIER_CONFLICT",
+                "detail": "Choose no more than one instrument from each register tier.",
+            },
+        )
+
+    requested_locks = req.locked_parts or []
+    unmatched_locks = [
+        lock for lock in requested_locks
+        if not any(
+            lock.lower() == instrument.lower()
+            or lock.lower() in instrument.lower()
+            or instrument.lower() in LOCK_ALIASES.get(lock.lower(), set())
+            for instrument in instruments
+        )
+    ]
+    if unmatched_locks:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": "LOCKED_PART_NOT_SELECTED",
+                "detail": f"Locked part is not selected: {', '.join(unmatched_locks)}.",
+            },
         )
 
     bpm = req.bpm if req.bpm is not None else 110
@@ -89,6 +164,18 @@ async def generate_riff(req: GenerateRequest):
             }
         )
 
+    if req.base_take_id is not None and not any(
+        take["take_id"] == req.base_take_id for take in agent.take_history
+    ):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": "TAKE_NOT_FOUND",
+                "detail": "The selected take is no longer available in this server process.",
+            },
+        )
+
     try:
         # A fresh agent per request: serverless instances are shared between users,
         # so take state must come from the client (previous_score), never from memory.
@@ -100,12 +187,22 @@ async def generate_riff(req: GenerateRequest):
             instruments=instruments,
             locked_parts=req.locked_parts or [],
             seed=req.seed,
-            previous_score=req.previous_score
+            previous_score=req.previous_score,
+            base_take_id=req.base_take_id,
         )
         return {
             "status": "success",
             "data": data
         }
+    except ProgressionError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": "PROGRESSION_INVALID",
+                "detail": str(exc),
+            },
+        )
     except ValueError as exc:
         return JSONResponse(
             status_code=422,
@@ -114,6 +211,17 @@ async def generate_riff(req: GenerateRequest):
                 "code": "CHORD_SYNTAX",
                 "detail": str(exc)
             }
+        )
+    except PromptRefusal as exc:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": exc.code,
+                "detail": exc.detail,
+                "alternative": exc.alternative,
+            },
+        )
         )
     except Exception as exc:
         return JSONResponse(
