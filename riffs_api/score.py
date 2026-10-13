@@ -29,8 +29,8 @@ _CHORD_INTERVALS = {
 @dataclass(frozen=True)
 class ScoreNote:
     pitch_midi: int
-    onset_beats: int
-    duration_beats: int
+    onset_beats: float
+    duration_beats: float
     velocity: int
 
 
@@ -65,6 +65,7 @@ _PERCUSSION_PITCHES = {
     "cymbals": (42, 46),         # Closed and open hi-hat
     "triangle": (80, 81),        # Muted and open triangle
 }
+SUPPORTED_GROOVES = ("straight", "half_time", "swing")
 
 
 def instrument_role(instrument: str) -> str:
@@ -84,8 +85,16 @@ def midi_channel_for_instrument(instrument: str) -> int:
     return 9 if instrument_role(instrument) == "percussion" else 0
 
 
-def draft_instrument_score(score: ScoreDraft, instrument: str) -> ScoreDraft:
-    """Create a role-specific symbolic lane from the chord-first score."""
+def draft_instrument_score(
+    score: ScoreDraft,
+    instrument: str,
+    groove: str = "straight",
+) -> ScoreDraft:
+    """Create a role-specific symbolic lane using a supported rhythmic feel."""
+    if groove not in SUPPORTED_GROOVES:
+        choices = ", ".join(SUPPORTED_GROOVES)
+        raise ValueError(f"Unsupported groove '{groove}'. Choose one of: {choices}.")
+
     role = instrument_role(instrument)
     bars: list[ScoreBar] = []
 
@@ -93,24 +102,49 @@ def draft_instrument_score(score: ScoreDraft, instrument: str) -> ScoreDraft:
         chord_tones = [note.pitch_midi for note in bar.notes]
         root = chord_tones[0]
 
-        if role == "bass":
+        if groove == "straight" and role == "bass":
             fifth = chord_tones[2] if len(chord_tones) > 2 else root + 7
             shift = -24 if instrument.strip().lower() == "contrabass" else -12
             notes = (
                 ScoreNote(root + shift, 0, 2, 92),
                 ScoreNote(fifth + shift, 2, 2, 76),
             )
+        elif groove == "half_time" and role == "bass":
+            fifth = chord_tones[2] if len(chord_tones) > 2 else root + 7
+            shift = -24 if instrument.strip().lower() == "contrabass" else -12
+            notes = (
+                ScoreNote(root + shift, 0, 3, 92),
+                ScoreNote(fifth + shift, 3, 1, 72),
+            )
+        elif groove == "swing" and role == "bass":
+            fifth = chord_tones[2] if len(chord_tones) > 2 else root + 7
+            shift = -24 if instrument.strip().lower() == "contrabass" else -12
+            # A swung eighth-note pickup leads into the fifth on beat 2.
+            notes = (
+                ScoreNote(root + shift, 0, 2 / 3, 92),
+                ScoreNote(fifth + shift, 2 / 3, 4 / 3, 68),
+                ScoreNote(root + shift, 2, 2 / 3, 84),
+                ScoreNote(fifth + shift, 8 / 3, 4 / 3, 72),
+            )
         elif role == "chords":
             octave = 12 if instrument.strip().lower() == "ukulele" else 0
             voicing = tuple(pitch + octave for pitch in chord_tones[:4])
+            if groove == "half_time":
+                chord_attacks = ((0, 1, 86), (3, 1, 66))
+            elif groove == "swing":
+                chord_attacks = ((0, 1 / 3, 86), (2 / 3, 1 / 3, 62), (2, 1 / 3, 76), (8 / 3, 1 / 3, 62))
+            else:
+                chord_attacks = ((0, 1, 86), (2, 1, 72))
             notes = tuple(
-                ScoreNote(pitch, onset, 1, velocity)
-                for onset, velocity in ((0, 86), (2, 72))
+                ScoreNote(pitch, onset, duration, velocity)
+                for onset, duration, velocity in chord_attacks
                 for pitch in voicing
             )
         elif role == "percussion":
             first, second = _PERCUSSION_PITCHES[instrument.strip().lower()]
-            if instrument.strip().lower() == "bass_drums":
+            if groove == "half_time":
+                events = ((0, first, 104), (3, second, 76))
+            elif instrument.strip().lower() == "bass_drums":
                 events = ((0, first, 108), (2, first, 92))
             elif instrument.strip().lower() == "floor_tom":
                 events = ((0, first, 90), (2, second, 78))
@@ -120,19 +154,28 @@ def draft_instrument_score(score: ScoreDraft, instrument: str) -> ScoreDraft:
                 events = ((0, first, 70), (1, first, 54), (2, first, 64), (3, second, 74))
             else:  # triangle
                 events = ((0, first, 55), (1, first, 42), (2, first, 50), (3, second, 62))
-            notes = tuple(ScoreNote(pitch, onset, 1, velocity) for onset, pitch, velocity in events)
+            if groove == "swing":
+                events = tuple((2 / 3 if onset == 1 else 8 / 3 if onset == 3 else onset, pitch, velocity) for onset, pitch, velocity in events)
+            notes = tuple(ScoreNote(pitch, onset, 1 / 3 if groove == "swing" else 1, velocity) for onset, pitch, velocity in events)
         else:
             melody_tones = chord_tones[:3] or [root]
             pattern = (0, 1, 2, 1)
             octave = 12 if instrument.strip().lower() in {"piccolo", "tenor_sax"} else 0
-            notes = tuple(
-                ScoreNote(
-                    melody_tones[degree % len(melody_tones)] + octave,
-                    beat,
-                    1,
-                    84 if beat in (0, 2) else 68,
+            if groove == "half_time":
+                melody_events = ((0, 0, 1.5, 84), (2, 2, 2, 72))
+            elif groove == "swing":
+                melody_events = tuple(
+                    (beat // 2 + (2 / 3 if beat % 2 else 0), degree, 1 / 3, 84 if beat % 2 == 0 else 68)
+                    for beat, degree in enumerate((0, 1, 1, 2, 2, 1, 1, 0))
                 )
-                for beat, degree in enumerate(pattern)
+            else:
+                melody_events = tuple(
+                    (beat, degree, 1, 84 if beat in (0, 2) else 68)
+                    for beat, degree in enumerate(pattern)
+                )
+            notes = tuple(
+                ScoreNote(melody_tones[degree % len(melody_tones)] + octave, onset, duration, velocity)
+                for onset, degree, duration, velocity in melody_events
             )
 
         bars.append(

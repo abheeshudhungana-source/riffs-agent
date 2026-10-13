@@ -52,8 +52,8 @@ def midi_bytes(score: ScoreDraft, channel: int = 0) -> bytes:
     for bar_index, bar in enumerate(score.bars):
         bar_start = bar_index * score.beats_per_bar * ticks_per_beat
         for note in bar.notes:
-            start = bar_start + note.onset_beats * ticks_per_beat
-            end = start + note.duration_beats * ticks_per_beat
+            start = bar_start + round(note.onset_beats * ticks_per_beat)
+            end = start + round(note.duration_beats * ticks_per_beat)
             events.append((start, 4, bytes((0x90 | channel, note.pitch_midi, note.velocity))))
             events.append((end, 3, bytes((0x80 | channel, note.pitch_midi, 0))))
 

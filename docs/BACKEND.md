@@ -45,7 +45,7 @@ For the G major example, the ZIP contains `riff_Gmaj_110bpm.mid`, `riff_Gmaj_110
 
 ## Day 1 generation and locking
 
-The frontend uses `POST /api/generate`. It accepts `prompt`, `key`, `bpm`, `chords`, `instruments`, and `locked_parts`. The endpoint enforces the practice UI's 60–200 BPM range, validates the selected register tiers, and returns Nashville chart data plus per-lane symbolic notes and MIDI bytes.
+The frontend uses `POST /api/generate`. It accepts `prompt`, `key`, `bpm`, `chords`, `instruments`, `locked_parts`, and an optional `groove` preset. Supported grooves are `straight` (the default), `half_time`, and `swing`. The endpoint enforces the practice UI's 60–200 BPM range, validates the selected register tiers, and returns Nashville chart data plus per-lane symbolic notes and MIDI bytes.
 
 ```json
 {
@@ -54,11 +54,12 @@ The frontend uses `POST /api/generate`. It accepts `prompt`, `key`, `bpm`, `chor
   "bpm": 110,
   "chords": "Am - F - C - G",
   "instruments": ["bass_guitar", "rhythm_guitar", "cymbals"],
-  "locked_parts": ["bass_guitar"]
+  "locked_parts": ["bass_guitar"],
+  "groove": "swing"
 }
 ```
 
-Each successful response includes a monotonically increasing `take_id`, `part_scores`, and the compatibility `stems` field. Despite that legacy field name, each listed file is symbolic MIDI (`.mid`), not a rendered audio stem. `part_scores[instrument].midi_base64` contains its file, `midi_sha256` identifies the exact file bytes, and `note_vector_sha256` identifies the note data independently of tempo. When a lane is locked and was present in the previous take, the backend keeps its exact prior note vectors and updates the MIDI tempo metadata to match the new take. The latest five takes are kept in memory for the lifetime of the app process only.
+Each successful response includes a monotonically increasing `take_id`, the chosen top-level `groove`, `part_scores`, and the compatibility `stems` field. Each part score also reports its groove. Despite the legacy `stems` field name, each listed file is symbolic MIDI (`.mid`), not a rendered audio stem. `part_scores[instrument].midi_base64` contains its file, `midi_sha256` identifies the exact file bytes, and `note_vector_sha256` identifies the note data independently of tempo. When a lane is locked and was present in the previous take, the backend keeps its exact prior note vectors and reports the groove stored with that lane while refreshing MIDI tempo metadata. Swing note timing uses triplet subdivisions. The latest five takes are kept in memory for the lifetime of the app process only.
 
 The `license_certificate` response is explicitly marked `not_issued`. The current repo does not configure a licensed sample source, and neither the `/api/generate` route nor the frontend Save MP3 button produces WAV/MP3 audio. The versioned render route remains the supported way to download symbolic MIDI, MusicXML, and chord-chart exports.
 
@@ -66,7 +67,7 @@ The versioned `/api/v1/scores/draft` and symbolic package export remain chord-fi
 
 ## Instrument role patterns
 
-`POST /api/generate` now turns the chord draft into a deterministic note pattern for each selected lane. Bass lanes alternate chord roots and fifths, chordal instruments play short stabs, melodic instruments play a four-beat chord-tone line, and percussion lanes use General MIDI drum pitches on MIDI channel 10. Each `part_scores` entry and `stems` item includes its `role`. These are symbolic MIDI practice patterns; they are not audio and do not yet respond to prompt-specific style or groove requests.
+`POST /api/generate` turns the chord draft into a deterministic note pattern for each selected lane. The explicit groove preset changes rhythmic density and timing for bass, chordal, melodic, and percussion roles. Bass lanes use root/fifth patterns, chordal instruments play stabs, melodic instruments use chord tones, and percussion lanes use General MIDI drum pitches on MIDI channel 10. Each `part_scores` entry and `stems` item includes its `role`; each part score also reports its groove. Freeform prompt text still does not select or alter the groove automatically.
 
 ## Prompt safety foundation
 

@@ -54,6 +54,23 @@ class TestAgentLoop(unittest.TestCase):
                 self.assertEqual(history[1]["state_after"]["status"], "awaiting_input")
                 self.assertTrue(history[1]["state_after"]["done"])
 
+    def test_unsafe_prompt_is_logged_and_refused_before_drafting(self):
+        body = run_agent_loop_endpoint(AgentLoopRequest(
+            progression="I - IV - V - vi",
+            key="C major",
+            tempo_bpm=100,
+            prompt="Write lyrics for a complete song.",
+        ))
+
+        self.assertEqual(body["status"], "refused")
+        self.assertEqual(body["step_count"], 1)
+        self.assertEqual(body["history"][0]["state"]["status"], "unsafe_request")
+        self.assertEqual(body["history"][0]["decision"]["action"], "refuse")
+        self.assertEqual(body["history"][0]["state_after"]["status"], "refused")
+        self.assertIsNone(body["final_state"]["parsed_progression"])
+        self.assertIsNone(body["final_state"]["score"])
+        self.assertIsNone(body["final_state"]["export"])
+
 
 if __name__ == "__main__":
     unittest.main()

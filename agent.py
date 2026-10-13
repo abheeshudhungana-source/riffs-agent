@@ -19,12 +19,12 @@ CHROMATIC_SCALE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "
 FLAT_TO_SHARP = {"Db": "C#", "Eb": "D#", "Gb": "F#", "Ab": "G#", "Bb": "A#"}
 
 
-def _part_score_payload(instrument: str, score: Any) -> Dict[str, Any]:
+def _part_score_payload(instrument: str, score: Any, groove: str = "straight") -> Dict[str, Any]:
     """Serialize a deterministic symbolic lane and its MIDI bytes."""
     from riffs_api.exports import midi_bytes
     from riffs_api.score import draft_instrument_score, instrument_role, midi_channel_for_instrument
 
-    lane_score = draft_instrument_score(score, instrument)
+    lane_score = draft_instrument_score(score, instrument, groove)
     midi = midi_bytes(lane_score, channel=midi_channel_for_instrument(instrument))
     serialized_bars = [
         {
@@ -45,6 +45,7 @@ def _part_score_payload(instrument: str, score: Any) -> Dict[str, Any]:
     return {
         "instrument": instrument,
         "role": instrument_role(instrument),
+        "groove": groove,
         "tempo_bpm": lane_score.tempo_bpm,
         "chord_chart": lane_score.chord_chart,
         "nashville_chart": lane_score.nashville_chart,
@@ -85,6 +86,7 @@ def _reuse_locked_part(instrument: str, previous: Dict[str, Any], score: Any) ->
     payload.update({
         "instrument": instrument,
         "role": instrument_role(instrument),
+        # A locked lane retains the groove that produced its saved note vectors.
         "tempo_bpm": lane_score.tempo_bpm,
         "midi_base64": base64.b64encode(midi).decode("ascii"),
         "midi_sha256": hashlib.sha256(midi).hexdigest(),
@@ -232,6 +234,7 @@ class RiffsAgent:
         instruments: Optional[List[str]] = None,
         locked_parts: Optional[List[str]] = None,
         base_take_id: Optional[int] = None,
+        groove: str = "straight",
     ) -> Dict[str, Any]:
         """
         Executes Day 1 symbolic blueprint generation with part-locking.
@@ -249,7 +252,11 @@ class RiffsAgent:
 
         # Keep a deterministic symbolic representation beside the UI chart data.
         # A locked lane reuses its exact note vectors and refreshes global tempo metadata.
-        from riffs_api.score import draft_score
+        from riffs_api.score import SUPPORTED_GROOVES, draft_score
+
+        if groove not in SUPPORTED_GROOVES:
+            choices = ", ".join(SUPPORTED_GROOVES)
+            raise ValueError(f"Unsupported groove '{groove}'. Choose one of: {choices}.")
 
         symbolic_score = draft_score(chords, key, bpm)
         base_take = next(
@@ -265,7 +272,7 @@ class RiffsAgent:
             if lock_requested and prior_lane is not None:
                 lane_payload = _reuse_locked_part(inst, prior_lane, symbolic_score)
             else:
-                lane_payload = _part_score_payload(inst, symbolic_score)
+                lane_payload = _part_score_payload(inst, symbolic_score, groove)
             lane_payload["locked"] = bool(lock_requested)
             part_scores[inst] = lane_payload
 
@@ -306,7 +313,7 @@ class RiffsAgent:
                     "Respond with pure valid JSON matching:\n"
                     '{"style_notes": "...", "groove_feel": "...", "dynamic_variation": "..."}'
                 )
-                user_msg = f"Key: {key}, BPM: {bpm}, Chords: {parsed_chords}, Instruments: {instruments}, Prompt: {prompt}"
+                user_msg = f"Key: {key}, BPM: {bpm}, Groove: {groove}, Chords: {parsed_chords}, Instruments: {instruments}, Prompt: {prompt}"
                 resp = litellm.completion(
                     model=self.model_id,
                     messages=[
@@ -327,6 +334,7 @@ class RiffsAgent:
         result_data = {
             "key": key,
             "bpm": bpm,
+            "groove": groove,
             "chords": parsed_chords,
             "nashville_chart": nashville_chart,
             "tab_score": tab_score,

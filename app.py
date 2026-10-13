@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import Literal, Optional, List
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -50,6 +50,7 @@ class GenerateRequest(BaseModel):
     instruments: Optional[List[str]] = Field(default_factory=lambda: ["bass_guitar", "rhythm_guitar", "cymbals"])
     locked_parts: Optional[List[str]] = Field(default_factory=list)
     base_take_id: Optional[int] = None
+    groove: Literal["straight", "half_time", "swing"] = "straight"
 
 
 ALLOWED_INSTRUMENTS = {
@@ -177,6 +178,7 @@ async def generate_riff(req: GenerateRequest):
             instruments=instruments,
             locked_parts=req.locked_parts or [],
             base_take_id=req.base_take_id,
+            groove=req.groove,
         )
         return {
             "status": "success",
