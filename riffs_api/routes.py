@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from riffs_api.progression import ProgressionError, parse_progression
 from riffs_api.render import render_symbolic_package, symbolic_package_filename
 from riffs_api.score import draft_score
+from riffs_api.agent_loop import RiffBuildEnvironment, run_loop
 
 router = APIRouter()
 
@@ -59,6 +60,13 @@ class ScoreDraftResponse(BaseModel):
     chord_chart: str
     nashville_chart: str | None
     bars: list[ScoreBarResponse]
+
+
+class AgentLoopRequest(BaseModel):
+    progression: str = Field(min_length=1, max_length=512)
+    key: str | None = Field(default=None, description="Required for Nashville-number progressions.")
+    tempo_bpm: int = Field(default=120, ge=40, le=240)
+    max_steps: int = Field(default=5, ge=1, le=5)
 
 
 @router.post("/api/v1/progressions/parse", response_model=ParseProgressionResponse)
@@ -119,3 +127,22 @@ def render_riff_to_audio_endpoint(request: ParseProgressionRequest) -> Response:
             )
         },
     )
+
+
+@router.post("/api/v1/agent/run")
+def run_agent_loop_endpoint(request: AgentLoopRequest) -> dict:
+    """Run the deterministic observe-decide-act loop for a symbolic riff draft."""
+    env = RiffBuildEnvironment(
+        request.progression,
+        request.key,
+        request.tempo_bpm,
+    )
+    history = run_loop(env, max_steps=request.max_steps)
+    final_state = env.get_state()
+    return {
+        "status": final_state["status"],
+        "done": final_state["done"],
+        "step_count": len(history),
+        "history": history,
+        "final_state": final_state,
+    }

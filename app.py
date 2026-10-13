@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from riffs_api.progression import ProgressionError
 from riffs_api.routes import router as riff_routes
+from riffs_api.prompt_guardrails import PromptRefusal
 
 # Import the RIFFs agent harness
 try:
@@ -188,6 +189,16 @@ async def generate_riff(req: GenerateRequest):
                 "status": "error",
                 "code": "PROGRESSION_INVALID",
                 "detail": str(exc),
+            },
+        )
+    except PromptRefusal as exc:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": exc.code,
+                "detail": exc.detail,
+                "alternative": exc.alternative,
             },
         )
     except Exception as exc:

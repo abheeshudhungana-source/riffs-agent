@@ -60,7 +60,7 @@ _MAJOR_QUALITIES = ("major", "minor", "minor", "major", "major", "minor", "dimin
 _MINOR_QUALITIES = ("minor", "diminished", "major", "minor", "minor", "major", "major")
 _ROMAN_DEGREES = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7}
 
-_KEY_RE = re.compile(r"^([A-Ga-g])([#b]?)(?:\s+(major|minor|maj|min|m))?$", re.IGNORECASE)
+_KEY_RE = re.compile(r"^([A-Ga-g])([#b]?)(?:\s*(major|minor|maj|min|m))?$", re.IGNORECASE)
 _CHORD_RE = re.compile(
     r"^(?P<root>[A-Ga-g])(?P<accidental>[#b]?)(?P<quality>minor7|maj7|m7b5|m7|ø|dim7|maj|minor|min|m|dim|°|aug|\+|sus2|sus4|sus|7|6|9|11|13)?$",
     re.IGNORECASE,

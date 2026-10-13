@@ -63,3 +63,13 @@ Each successful response includes a monotonically increasing `take_id`, `part_sc
 The `license_certificate` response is explicitly marked `not_issued`. The current repo does not configure a licensed sample source, and neither the `/api/generate` route nor the frontend Save MP3 button produces WAV/MP3 audio. The versioned render route remains the supported way to download symbolic MIDI, MusicXML, and chord-chart exports.
 
 The score model currently uses one block chord per bar. It does not yet regenerate role-specific bass, percussion, or lead patterns from the style prompt. See [BACKEND_PRD_MAP.md](BACKEND_PRD_MAP.md) for the scope boundary and remaining PRD work.
+
+## Prompt safety foundation
+
+`POST /api/generate` checks the user's creative prompt before score generation or an optional model call. It returns a structured 422 refusal for lyric or vocal requests, complete-song requests, and explicit exact or verbatim copying requests that identify a song or recording. The refusal includes an `alternative` suggesting a short, original instrumental request. User prompt text is also labeled as untrusted creative direction in the model system prompt.
+
+These checks are a deterministic ingress baseline, not a musical copyright detector. The current backend has no melodic hook corpus, multi-bar contour comparison, or licensed sample catalog, and the block-chord score cannot establish whether a generated melody resembles a commercial recording. Do not interpret a request passing these checks as a clearance result.
+
+## Observable symbolic agent loop
+
+`POST /api/v1/agent/run` records each observation, state-based decision, action result, and post-action observation while parsing a progression, drafting a score, and exporting the symbolic package. A parse failure is observed as `parse_failed`; the policy then records a `request_clarification` action and ends in `awaiting_input`. The route caps the loop at five steps. Its policy is deterministic and does not use an LLM.
