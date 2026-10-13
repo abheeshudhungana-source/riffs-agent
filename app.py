@@ -222,7 +222,6 @@ async def generate_riff(req: GenerateRequest):
                 "alternative": exc.alternative,
             },
         )
-        )
     except Exception as exc:
         return JSONResponse(
             status_code=500,
