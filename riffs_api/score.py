@@ -53,6 +53,108 @@ class ScoreDraft:
     bars: tuple[ScoreBar, ...]
 
 
+_PERCUSSION_INSTRUMENTS = {
+    "bass_drums", "floor_tom", "bongos", "cymbals", "triangle",
+}
+_BASS_INSTRUMENTS = {"bass_guitar", "contrabass"}
+_CHORD_INSTRUMENTS = {"rhythm_guitar", "acoustic_piano", "ukulele"}
+_PERCUSSION_PITCHES = {
+    "bass_drums": (36, 36),       # Bass drum 1
+    "floor_tom": (43, 47),       # High and low floor tom
+    "bongos": (60, 64),          # Low and high bongo
+    "cymbals": (42, 46),         # Closed and open hi-hat
+    "triangle": (80, 81),        # Muted and open triangle
+}
+
+
+def instrument_role(instrument: str) -> str:
+    """Return the deterministic arrangement role for a supported lane."""
+    normalized = instrument.strip().lower()
+    if normalized in _PERCUSSION_INSTRUMENTS:
+        return "percussion"
+    if normalized in _BASS_INSTRUMENTS:
+        return "bass"
+    if normalized in _CHORD_INSTRUMENTS:
+        return "chords"
+    return "melody"
+
+
+def midi_channel_for_instrument(instrument: str) -> int:
+    """Use General MIDI channel 10 for percussion lanes, channel 1 otherwise."""
+    return 9 if instrument_role(instrument) == "percussion" else 0
+
+
+def draft_instrument_score(score: ScoreDraft, instrument: str) -> ScoreDraft:
+    """Create a role-specific symbolic lane from the chord-first score."""
+    role = instrument_role(instrument)
+    bars: list[ScoreBar] = []
+
+    for bar in score.bars:
+        chord_tones = [note.pitch_midi for note in bar.notes]
+        root = chord_tones[0]
+
+        if role == "bass":
+            fifth = chord_tones[2] if len(chord_tones) > 2 else root + 7
+            shift = -24 if instrument.strip().lower() == "contrabass" else -12
+            notes = (
+                ScoreNote(root + shift, 0, 2, 92),
+                ScoreNote(fifth + shift, 2, 2, 76),
+            )
+        elif role == "chords":
+            octave = 12 if instrument.strip().lower() == "ukulele" else 0
+            voicing = tuple(pitch + octave for pitch in chord_tones[:4])
+            notes = tuple(
+                ScoreNote(pitch, onset, 1, velocity)
+                for onset, velocity in ((0, 86), (2, 72))
+                for pitch in voicing
+            )
+        elif role == "percussion":
+            first, second = _PERCUSSION_PITCHES[instrument.strip().lower()]
+            if instrument.strip().lower() == "bass_drums":
+                events = ((0, first, 108), (2, first, 92))
+            elif instrument.strip().lower() == "floor_tom":
+                events = ((0, first, 90), (2, second, 78))
+            elif instrument.strip().lower() == "bongos":
+                events = ((0, first, 82), (1, second, 64), (2, first, 76), (3, second, 64))
+            elif instrument.strip().lower() == "cymbals":
+                events = ((0, first, 70), (1, first, 54), (2, first, 64), (3, second, 74))
+            else:  # triangle
+                events = ((0, first, 55), (1, first, 42), (2, first, 50), (3, second, 62))
+            notes = tuple(ScoreNote(pitch, onset, 1, velocity) for onset, pitch, velocity in events)
+        else:
+            melody_tones = chord_tones[:3] or [root]
+            pattern = (0, 1, 2, 1)
+            octave = 12 if instrument.strip().lower() in {"piccolo", "tenor_sax"} else 0
+            notes = tuple(
+                ScoreNote(
+                    melody_tones[degree % len(melody_tones)] + octave,
+                    beat,
+                    1,
+                    84 if beat in (0, 2) else 68,
+                )
+                for beat, degree in enumerate(pattern)
+            )
+
+        bars.append(
+            ScoreBar(
+                bar=bar.bar,
+                chord_symbol=bar.chord_symbol,
+                nashville=bar.nashville,
+                notes=notes,
+            )
+        )
+
+    return ScoreDraft(
+        key=score.key,
+        tempo_bpm=score.tempo_bpm,
+        time_signature=score.time_signature,
+        beats_per_bar=score.beats_per_bar,
+        chord_chart=score.chord_chart,
+        nashville_chart=score.nashville_chart,
+        bars=tuple(bars),
+    )
+
+
 def draft_score(progression: str, key: str | None, tempo_bpm: int) -> ScoreDraft:
     """Create a plain 4/4 block-chord score as a first symbolic baseline."""
     parsed: ParsedProgression = parse_progression(progression, key)

@@ -62,7 +62,11 @@ Each successful response includes a monotonically increasing `take_id`, `part_sc
 
 The `license_certificate` response is explicitly marked `not_issued`. The current repo does not configure a licensed sample source, and neither the `/api/generate` route nor the frontend Save MP3 button produces WAV/MP3 audio. The versioned render route remains the supported way to download symbolic MIDI, MusicXML, and chord-chart exports.
 
-The score model currently uses one block chord per bar. It does not yet regenerate role-specific bass, percussion, or lead patterns from the style prompt. See [BACKEND_PRD_MAP.md](BACKEND_PRD_MAP.md) for the scope boundary and remaining PRD work.
+The versioned `/api/v1/scores/draft` and symbolic package export remain chord-first, with one block chord per bar. `/api/generate` now expands that chord draft into role-specific symbolic lanes, but does not yet derive variations from the style prompt. See [BACKEND_PRD_MAP.md](BACKEND_PRD_MAP.md) for the scope boundary and remaining PRD work.
+
+## Instrument role patterns
+
+`POST /api/generate` now turns the chord draft into a deterministic note pattern for each selected lane. Bass lanes alternate chord roots and fifths, chordal instruments play short stabs, melodic instruments play a four-beat chord-tone line, and percussion lanes use General MIDI drum pitches on MIDI channel 10. Each `part_scores` entry and `stems` item includes its `role`. These are symbolic MIDI practice patterns; they are not audio and do not yet respond to prompt-specific style or groove requests.
 
 ## Prompt safety foundation
 

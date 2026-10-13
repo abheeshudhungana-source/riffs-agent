@@ -22,39 +22,10 @@ FLAT_TO_SHARP = {"Db": "C#", "Eb": "D#", "Gb": "F#", "Ab": "G#", "Bb": "A#"}
 def _part_score_payload(instrument: str, score: Any) -> Dict[str, Any]:
     """Serialize a deterministic symbolic lane and its MIDI bytes."""
     from riffs_api.exports import midi_bytes
-    from riffs_api.score import ScoreBar, ScoreDraft, ScoreNote
+    from riffs_api.score import draft_instrument_score, instrument_role, midi_channel_for_instrument
 
-    low_end = {"bass_guitar", "contrabass", "bass_drums", "floor_tom"}
-    high_end = {"cymbals", "triangle", "ukulele", "piccolo"}
-    octave_shift = -12 if instrument in low_end else 12 if instrument in high_end else 0
-    bars = tuple(
-        ScoreBar(
-            bar=bar.bar,
-            chord_symbol=bar.chord_symbol,
-            nashville=bar.nashville,
-            notes=tuple(
-                ScoreNote(
-                    pitch_midi=note.pitch_midi + octave_shift,
-                    onset_beats=note.onset_beats,
-                    duration_beats=note.duration_beats,
-                    velocity=note.velocity,
-                )
-                for note in bar.notes
-            ),
-        )
-        for bar in score.bars
-    )
-
-    lane_score = ScoreDraft(
-        key=score.key,
-        tempo_bpm=score.tempo_bpm,
-        time_signature=score.time_signature,
-        beats_per_bar=score.beats_per_bar,
-        chord_chart=score.chord_chart,
-        nashville_chart=score.nashville_chart,
-        bars=bars,
-    )
-    midi = midi_bytes(lane_score)
+    lane_score = draft_instrument_score(score, instrument)
+    midi = midi_bytes(lane_score, channel=midi_channel_for_instrument(instrument))
     serialized_bars = [
         {
             "bar": bar.bar,
@@ -73,6 +44,7 @@ def _part_score_payload(instrument: str, score: Any) -> Dict[str, Any]:
     ]
     return {
         "instrument": instrument,
+        "role": instrument_role(instrument),
         "tempo_bpm": lane_score.tempo_bpm,
         "chord_chart": lane_score.chord_chart,
         "nashville_chart": lane_score.nashville_chart,
@@ -88,7 +60,7 @@ def _part_score_payload(instrument: str, score: Any) -> Dict[str, Any]:
 def _reuse_locked_part(instrument: str, previous: Dict[str, Any], score: Any) -> Dict[str, Any]:
     """Keep a lane's prior note vectors while writing MIDI at the current tempo."""
     from riffs_api.exports import midi_bytes
-    from riffs_api.score import ScoreBar, ScoreDraft, ScoreNote
+    from riffs_api.score import ScoreBar, ScoreDraft, ScoreNote, instrument_role, midi_channel_for_instrument
 
     bars = tuple(
         ScoreBar(
@@ -108,10 +80,11 @@ def _reuse_locked_part(instrument: str, previous: Dict[str, Any], score: Any) ->
         nashville_chart=previous.get("nashville_chart", score.nashville_chart),
         bars=bars,
     )
-    midi = midi_bytes(lane_score)
+    midi = midi_bytes(lane_score, channel=midi_channel_for_instrument(instrument))
     payload = dict(previous)
     payload.update({
         "instrument": instrument,
+        "role": instrument_role(instrument),
         "tempo_bpm": lane_score.tempo_bpm,
         "midi_base64": base64.b64encode(midi).decode("ascii"),
         "midi_sha256": hashlib.sha256(midi).hexdigest(),
@@ -303,6 +276,7 @@ class RiffsAgent:
             is_locked = _locked_part(inst, locked_parts)
             stems.append({
                 "lane": inst,
+                "role": part_scores[inst]["role"],
                 "filename": f"riff_{key}_{bpm}bpm_{safe_inst}.mid",
                 "locked": is_locked,
                 "available": True,

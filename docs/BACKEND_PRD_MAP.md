@@ -10,7 +10,8 @@ The PRD does not define an engineering milestone named Day 0 or Day 1. The Day 1
 | Chord-to-chart mapping | Returns chord symbols and Nashville labels using key and scale math. |
 | Tempo validation | `/api/generate` accepts 60–200 BPM to match the practice UI. The versioned score/export routes accept 40–240 BPM. |
 | Ensemble selection | Validates one to three supported instruments, at most one instrument per low/mid/high register, and rejects unsupported values. |
-| Symbolic score | Produces MIDI note vectors and a MIDI file for each selected lane. Low and high register lanes are transposed by an octave from the middle register. |
+| Symbolic score | Produces MIDI note vectors and a MIDI file for each selected lane. |
+| Role-specific lanes | `/api/generate` drafts distinct deterministic patterns for bass, chordal, melodic, and percussion roles; bass and lead use role-appropriate registers, percussion MIDI uses channel 10, and each lane reports its role. |
 | Part locking | When a requested locked lane exists in the previous take, the next take reuses that lane's exact note vectors and refreshes MIDI tempo metadata. The response includes note-vector and MIDI SHA-256 digests. |
 | Take history | Keeps the latest five generated takes in the running application process and assigns monotonically increasing take IDs. This is in-memory state, not durable storage. |
 | Versioned score/export API | Exposes progression parsing, score drafts, and a ZIP with MIDI, MusicXML, chord chart JSON, and a manifest. |
@@ -27,8 +28,8 @@ The symbolic score is still a simple chord-tone block arrangement: one chord per
 | WAV/MP3 audio | No audio renderer or licensed multisample source is configured. The frontend's Save MP3 control is still a UI placeholder. |
 | License certificate | The API returns `status: not_issued`; it does not claim rights without a verified source and evidence. |
 | Durable takes | Take history is process-local and will not survive a restart or reliably span serverless instances. A persistence choice is needed. |
-| Part regeneration | The current symbolic baseline is deterministic and does not yet regenerate a musical role from the style prompt. |
-| Melodic copyright detection | No multi-bar contour matcher or hook database is configured; passing prompt checks is not a copyright clearance. The current score is chord-tone blocks, not a generated melody. |
+| Style-driven part regeneration | Role patterns are deterministic starter arrangements; they do not yet vary their rhythm or note choices from the style prompt. |
+| Melodic copyright detection | No multi-bar contour matcher or hook database is configured; passing prompt checks is not a copyright clearance. The `/api/generate` lead line is a deterministic chord-tone pattern, not a style-generated melody. |
 | Practice transport | Mute, metronome, speed trainer, and bar/beat transport remain client-side behavior. |
 | Video dubbing | Requires upload handling, FFmpeg/ffprobe, isolated scratch storage, and enforcing the PRD's size/duration limits. |
 
