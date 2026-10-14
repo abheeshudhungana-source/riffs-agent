@@ -150,6 +150,7 @@
               <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">High End</span>
               <select id="select-inst-high" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:border-emerald-400 transition cursor-pointer">
                 <option value="cymbals" selected>Cymbals</option>
+                <option value="drum_kit">Drum Kit</option>
                 <option value="ukulele">Ukulele</option>
                 <option value="piccolo">Piccolo</option>
                 <option value="triangle">Triangle</option>
@@ -595,6 +596,16 @@ E|---------------------------------------------------------5-3-0----|
       }
       return out;
     }
+    function snareVoice(sr, rng) {
+      var len = Math.floor(0.32 * sr), out = new Float32Array(len), tone = 0, hp = 0, prev = 0;
+      for (var n = 0; n < len; n++) {
+        var t = n / sr, white = rng() * 2 - 1;
+        hp = 0.72 * (hp + white - prev); prev = white;
+        tone += 0.16 * (Math.sin(TWO_PI * 185 * t) - tone);
+        out[n] = (hp * 0.72 + tone * 0.28) * Math.exp(-t * 19);
+      }
+      return out;
+    }
     function tomVoice(sr, rng) {
       var len = Math.floor(0.9 * sr), out = new Float32Array(len), ph = 0, ph2 = 0, rate = decayRate(0.65, sr), env = 1, lp = 0;
       for (var n = 0; n < len; n++) {
@@ -659,7 +670,7 @@ E|---------------------------------------------------------5-3-0----|
     };
     var TRIM = { // per-instrument level, balanced from measured loop RMS so no part drowns the others
       bass_guitar: 1.6, contrabass: 2.0, rhythm_guitar: 1.1, ukulele: 1.6, acoustic_piano: 0.3,
-      tenor_sax: 0.33, piccolo: 0.24, bass_drums: 0.9, floor_tom: 0.8, bongos: 0.7, cymbals: 1.8, triangle: 0.26
+      tenor_sax: 0.33, piccolo: 0.24, bass_drums: 0.9, drum_kit: 1.1, floor_tom: 0.8, bongos: 0.7, cymbals: 1.8, triangle: 0.26
     };
     var PAN = { low: 0, mid: -0.25, high: 0.25 };
 
@@ -679,6 +690,10 @@ E|---------------------------------------------------------5-3-0----|
           return windVoice(PICCOLO_TABLE, f, nOff, Math.floor(0.08 * sr), sr,
             { attack: 0.02, vibDelay: 0.15, vibDepth: 0.003, vibRate: 5.8, lpStart: 0.4, lpEnd: 0.8, breath: 0.04 }, rng);
         case 'bass_drums': return kickVoice(sr, rng);
+        case 'drum_kit':
+          if (midi === 36) return kickVoice(sr, rng);
+          if (midi === 38) return snareVoice(sr, rng);
+          return metalVoice(Math.floor(0.14 * sr), sr, { scale: 3.5, hp: 7000, t60: 0.06, tone: 0.6, noise: 0.5 }, rng);
         case 'floor_tom': return tomVoice(sr, rng);
         case 'bongos': return bongoVoice(midi === 60 ? 430 : 310, sr, rng);
         case 'triangle': return triangleVoice(midi === 80, sr, rng);
