@@ -592,14 +592,12 @@ E|---------------------------------------------------------5-3-0----|
       return out;
     }
     function snareVoice(sr, rng) {
-      var len = Math.floor(0.25 * sr), out = new Float32Array(len), ph = 0, rate = decayRate(0.18, sr), env = 1, hp = 0, prev = 0;
+      var len = Math.floor(0.32 * sr), out = new Float32Array(len), tone = 0, hp = 0, prev = 0;
       for (var n = 0; n < len; n++) {
-        var t = n / sr;
-        ph += TWO_PI * (180 + 80 * Math.exp(-t * 35)) / sr;
-        var w = rng() * 2 - 1;
-        hp = 0.7 * (hp + w - prev); prev = w;
-        out[n] = (Math.sin(ph) * 0.45 + hp * 0.65) * env;
-        env *= rate;
+        var t = n / sr, white = rng() * 2 - 1;
+        hp = 0.72 * (hp + white - prev); prev = white;
+        tone += 0.16 * (Math.sin(TWO_PI * 185 * t) - tone);
+        out[n] = (hp * 0.72 + tone * 0.28) * Math.exp(-t * 19);
       }
       return out;
     }
@@ -667,8 +665,7 @@ E|---------------------------------------------------------5-3-0----|
     };
     var TRIM = { // per-instrument level, balanced from measured loop RMS so no part drowns the others
       bass_guitar: 1.6, contrabass: 2.0, rhythm_guitar: 1.1, ukulele: 1.6, acoustic_piano: 0.3,
-      tenor_sax: 0.33, piccolo: 0.24, bass_drums: 0.9, floor_tom: 0.8, bongos: 0.7, cymbals: 1.8, triangle: 0.26,
-      drum_kit: 1.1
+      tenor_sax: 0.33, piccolo: 0.24, bass_drums: 0.9, drum_kit: 1.1, floor_tom: 0.8, bongos: 0.7, cymbals: 1.8, triangle: 0.26
     };
     var PAN = { low: 0, mid: -0.25, high: 0.25 };
 

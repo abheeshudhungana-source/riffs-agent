@@ -59,18 +59,18 @@ class GenerateRequest(BaseModel):
 ALLOWED_INSTRUMENTS = {
     "bass_guitar", "contrabass", "bass_drums", "floor_tom",
     "bongos", "rhythm_guitar", "acoustic_piano", "tenor_sax",
-    "cymbals", "triangle", "ukulele", "piccolo", "drum_kit",
+    "cymbals", "drum_kit", "triangle", "ukulele", "piccolo",
 }
 INSTRUMENT_TIERS = {
     "bass_guitar": "low", "contrabass": "low", "bass_drums": "low", "floor_tom": "low",
     "bongos": "mid", "rhythm_guitar": "mid", "acoustic_piano": "mid", "tenor_sax": "mid",
-    "cymbals": "high", "triangle": "high", "ukulele": "high", "piccolo": "high", "drum_kit": "high",
+    "cymbals": "high", "drum_kit": "high", "triangle": "high", "ukulele": "high", "piccolo": "high",
 }
 LOCK_ALIASES = {
     "bass": {"bass_guitar", "contrabass", "bass_drums"},
     "rhythm": {"rhythm_guitar", "acoustic_piano", "ukulele"},
     "lead": {"tenor_sax", "piccolo"},
-    "drums": {"bass_drums", "floor_tom", "bongos", "cymbals", "triangle", "drum_kit"},
+    "drums": {"bass_drums", "floor_tom", "bongos", "cymbals", "drum_kit", "triangle"},
 }
 
 @app.post("/api/generate")

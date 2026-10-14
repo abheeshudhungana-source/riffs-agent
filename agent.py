@@ -4,7 +4,7 @@ import json
 import hashlib
 import base64
 from typing import List, Dict, Any, Optional
-from composer import compose
+from composer import INSTRUMENT_TIER, compose
 from riffs_api.prompt_guardrails import validate_prompt
 # Load secrets from .env if dotenv is installed
 try:
@@ -303,7 +303,17 @@ class RiffsAgent:
         """
         # Enforce product boundaries before doing score work or calling an LLM.
         validate_prompt(prompt)
-        instruments = instruments or ["bass_guitar", "rhythm_guitar", "cymbals"]
+        instruments = list(instruments or ["bass_guitar", "rhythm_guitar", "cymbals"])
+        asks_for_drums = bool(re.search(r"\b(?:drum(?:s|mer)?|kick|snare|hi[- ]?hat|percussion)\b", prompt or "", re.IGNORECASE))
+        if asks_for_drums and "drum_kit" not in instruments:
+            high_tier_index = next(
+                (index for index, instrument in enumerate(instruments) if INSTRUMENT_TIER.get(instrument) == "high"),
+                None,
+            )
+            if high_tier_index is not None:
+                instruments[high_tier_index] = "drum_kit"
+            elif len(instruments) < 3:
+                instruments.append("drum_kit")
         locked_parts = locked_parts or []
 
         # Day 4 Prompt Co-Pilot: Extract intent from prompt if present

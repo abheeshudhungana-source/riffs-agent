@@ -32,7 +32,7 @@ MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10]
 INSTRUMENT_TIER = {
     "bass_guitar": "low", "contrabass": "low", "bass_drums": "low", "floor_tom": "low",
     "rhythm_guitar": "mid", "acoustic_piano": "mid", "tenor_sax": "mid", "bongos": "mid",
-    "cymbals": "high", "ukulele": "high", "piccolo": "high", "triangle": "high", "drum_kit": "high",
+    "cymbals": "high", "drum_kit": "high", "ukulele": "high", "piccolo": "high", "triangle": "high",
 }
 # The UI lock buttons talk about lanes (bass / lead / drums); map them to tiers.
 LANE_ALIAS = {"bass": "low", "lead": "mid", "drums": "high"}
@@ -464,6 +464,29 @@ def _gen_kick(bars: List[Dict[str, Any]], feel: Dict[str, Any], rng: random.Rand
     return events
 
 
+def _gen_drum_kit(bars: List[Dict[str, Any]], feel: Dict[str, Any], rng: random.Random) -> List[Dict[str, Any]]:
+    """Generate a unified kick, snare, and hi-hat lane that follows the parsed feel."""
+    events: List[Dict[str, Any]] = []
+    swing = feel["swing"]
+    for bar in range(len(bars)):
+        # A steady eighth-note hat pattern; offbeats inherit the prompt's swing.
+        for eighth in range(8):
+            pos = eighth * 0.5
+            velocity = 78 if eighth % 2 == 0 else 58
+            events.append(_event(bar, _swing_pos(pos, swing), 0.22, 42, velocity, feel["vel_scale"], rng))
+
+        # Halftime pocket: kick on one, snare on three, with a light pickup.
+        kick_positions = _KICK_PATTERNS[_pick(feel["kick"], rng)]
+        for pos, velocity in kick_positions:
+            events.append(_event(bar, _swing_pos(pos, swing), 0.35, 36, velocity, feel["vel_scale"], rng))
+        events.append(_event(bar, 2.0, 0.35, 38, 102, feel["vel_scale"], rng))
+        if bar % 2 == 1 and rng.random() < 0.65:
+            events.append(_event(bar, _swing_pos(3.5, swing), 0.2, 38, 52, feel["vel_scale"], rng))
+
+    events.sort(key=lambda event: (event["beat"], event["midi"]))
+    return events
+
+
 def _gen_floor_tom(bars: List[Dict[str, Any]], feel: Dict[str, Any], rng: random.Random) -> List[Dict[str, Any]]:
     events: List[Dict[str, Any]] = []
     for bar in range(len(bars)):
@@ -549,6 +572,8 @@ def _generate_lane(inst: str, bars: List[Dict[str, Any]], key_pc: int, minor: bo
         return _gen_drum_kit(bars, feel, rng)
     if inst == "cymbals":
         return _gen_cymbals(bars, feel, rng)
+    if inst == "drum_kit":
+        return _gen_drum_kit(bars, feel, rng)
     if inst == "bass_drums":
         return _gen_kick(bars, feel, rng)
     if inst == "floor_tom":
