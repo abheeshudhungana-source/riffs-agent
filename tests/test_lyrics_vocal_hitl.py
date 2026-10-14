@@ -13,6 +13,25 @@ from riffs_api.prompt_guardrails import PromptRefusal, validate_prompt
 class TestLyricsVocalHITL(unittest.TestCase):
     def setUp(self):
         self.agent = RiffsAgent()
+        self.prev_secret = os.environ.get("RIFFS_VOCAL_SECRET")
+        os.environ["RIFFS_VOCAL_SECRET"] = "test-secret-hitl-2026"
+
+    def tearDown(self):
+        if self.prev_secret is None:
+            os.environ.pop("RIFFS_VOCAL_SECRET", None)
+        else:
+            os.environ["RIFFS_VOCAL_SECRET"] = self.prev_secret
+
+    def test_vocal_secret_missing_raises_runtime_error(self):
+        os.environ.pop("RIFFS_VOCAL_SECRET", None)
+        with self.assertRaises(RuntimeError) as ctx:
+            self.agent.generate(
+                prompt="Neo-soul",
+                chords="Am - F - C - G",
+                lyrics_prompt="Driving at night",
+                vocal_approved=False,
+            )
+        self.assertIn("RIFFS_VOCAL_SECRET", str(ctx.exception))
 
     def test_guardrails_allow_lyrics_when_explicitly_enabled(self):
         # By default, instrumental prompt without lyrics permission rejects lyrics
@@ -57,6 +76,14 @@ class TestLyricsVocalHITL(unittest.TestCase):
         for i, bar in enumerate(lyrics_draft["bars"][:4]):
             self.assertEqual(bar["chord"], chords[i % len(chords)])
             self.assertTrue(len(bar["text"]) > 0)
+
+        # Checkpoint response must NOT bypass preview audio or local storage
+        self.assertIn("audio_preview", result)
+        self.assertEqual(result["audio_preview"]["format"], "wav")
+        self.assertIn("data_base64", result["audio_preview"])
+        self.assertIn("take_storage", result)
+        self.assertIn("storage_id", result["take_storage"])
+        self.assertIn("melodic_similarity", result)
 
         # Must provide a signed confirmation token
         self.assertIn("vocal_confirmation_token", result)

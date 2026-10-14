@@ -76,7 +76,7 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(chord.quality, "minor")
         self.assertEqual(chord.symbol, "Am")
 
-    def test_render_package_contains_exact_symbolic_exports(self) -> None:
+    def test_render_package_contains_symbolic_lanes_preview_and_provenance(self) -> None:
         package_bytes = render_symbolic_package("vi - IV - I - V", "G major", 110)
         with zipfile.ZipFile(BytesIO(package_bytes)) as package:
             self.assertEqual(
@@ -86,6 +86,10 @@ class RenderTests(unittest.TestCase):
                     "riff_Gmaj_110bpm.mid",
                     "riff_Gmaj_110bpm.musicxml",
                     "riff_Gmaj_110bpm_chord_chart.json",
+                    "riff_Gmaj_110bpm_bass_guitar.mid",
+                    "riff_Gmaj_110bpm_rhythm_guitar.mid",
+                    "riff_Gmaj_110bpm_drum_kit.mid",
+                    "riff_Gmaj_110bpm_preview.wav",
                 },
             )
             manifest = json.loads(package.read("manifest.json"))
@@ -95,8 +99,10 @@ class RenderTests(unittest.TestCase):
 
         self.assertEqual(manifest["chord_chart"], "| Em | C | G | D |")
         self.assertEqual(manifest["nashville_chart"], "| 6m | 4 | 1 | 5 |")
-        self.assertFalse(manifest["audio_rendered"])
-        self.assertIsNone(manifest["license_certificate"])
+        self.assertTrue(manifest["audio_rendered"])
+        self.assertEqual(manifest["audio_status"], "synthetic_preview")
+        self.assertEqual(manifest["license_certificate"]["status"], "provenance_only")
+        self.assertFalse(manifest["license_certificate"]["rights_grant"])
         self.assertEqual(chart["tempo_bpm"], 110)
         self.assertEqual([bar["chord_symbol"] for bar in chart["bars"]], ["Em", "C", "G", "D"])
 
@@ -135,7 +141,7 @@ class RenderTests(unittest.TestCase):
         self.assertIn("riff_Gmaj_110bpm_symbolic.zip", response.headers["content-disposition"])
         with zipfile.ZipFile(BytesIO(response.body)) as package:
             manifest = json.loads(package.read("manifest.json"))
-        self.assertEqual(manifest["status"], "symbolic_exports_ready")
+        self.assertEqual(manifest["status"], "preview_ready")
 
 
 if __name__ == "__main__":

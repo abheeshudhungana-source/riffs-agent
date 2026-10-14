@@ -52,8 +52,9 @@ class GenerateRequest(BaseModel):
     seed: Optional[int] = None
     previous_score: Optional[Dict[str, Any]] = None
     base_take_id: Optional[int] = None
+    base_storage_id: Optional[str] = None
     issue_license: Optional[bool] = True
-    groove: Literal["straight", "half_time", "swing"] = "straight"
+    groove: Optional[Literal["straight", "half_time", "swing", "half_time_shuffle"]] = None
     lyrics_prompt: Optional[str] = None
     lyrics_language: Optional[str] = "en"
     vocal_style: Optional[str] = "soulful_lead"
@@ -172,7 +173,7 @@ async def generate_riff(req: GenerateRequest):
             }
         )
 
-    if req.base_take_id is not None and not any(
+    if req.base_take_id is not None and req.previous_score is None and req.base_storage_id is None and not any(
         take["take_id"] == req.base_take_id for take in agent.take_history
     ):
         return JSONResponse(
@@ -185,8 +186,19 @@ async def generate_riff(req: GenerateRequest):
         )
 
     try:
-        # A fresh agent per request: serverless instances are shared between users,
-        # so take state must come from the client (previous_score), never from memory.
+        previous_score = req.previous_score
+        previous_take = None
+        if req.base_storage_id:
+            from riffs_api.take_store import get_take
+            stored_record = get_take(req.base_storage_id)
+            if stored_record is None:
+                return JSONResponse(
+                    status_code=404,
+                    content={"status": "error", "code": "TAKE_NOT_FOUND", "detail": "No local take matches that ID."},
+                )
+            previous_take = stored_record["take"]
+            previous_score = previous_score or previous_take.get("score")
+        # The client can supply either prior score JSON or a local take storage ID.
         data = RiffsAgent().generate(
             prompt=req.prompt,
             key=req.key or "Am",
@@ -195,7 +207,8 @@ async def generate_riff(req: GenerateRequest):
             instruments=instruments,
             locked_parts=req.locked_parts or [],
             seed=req.seed,
-            previous_score=req.previous_score,
+            previous_score=previous_score,
+            previous_take=previous_take,
             base_take_id=req.base_take_id,
             issue_license=True if req.issue_license is None else req.issue_license,
             groove=req.groove,
@@ -259,7 +272,7 @@ class VocalApproveRequest(BaseModel):
     instruments: Optional[List[str]] = Field(default_factory=lambda: ["bass_guitar", "rhythm_guitar", "cymbals"])
     edited_lyrics: Optional[Union[List[str], List[Dict[str, Any]]]] = None
     seed: Optional[int] = None
-    groove: Literal["straight", "half_time", "swing"] = "straight"
+    groove: Optional[Literal["straight", "half_time", "swing", "half_time_shuffle"]] = "straight"
     vocal_style: Optional[str] = "soulful_lead"
     lyrics_language: Optional[str] = "en"
 
@@ -287,6 +300,19 @@ async def approve_vocal_track(req: VocalApproveRequest):
         return JSONResponse(status_code=403, content={"status": "error", "code": "VOCAL_AUTH_FAILED", "detail": str(exc)})
     except Exception as exc:
         return JSONResponse(status_code=500, content={"status": "error", "code": "VOCAL_RENDER_FAILED", "detail": str(exc)})
+
+
+@app.get("/api/takes/{storage_id}")
+async def get_stored_take(storage_id: str):
+    """Read a take saved in this app instance's configured local folder."""
+    from riffs_api.take_store import get_take
+    record = get_take(storage_id)
+    if record is None:
+        return JSONResponse(
+            status_code=404,
+            content={"status": "error", "code": "TAKE_NOT_FOUND", "detail": "No local take matches that ID."},
+        )
+    return {"status": "success", "data": record}
 
 
 class VideoRemuxRequest(BaseModel):

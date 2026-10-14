@@ -5,7 +5,9 @@ import hashlib
 import base64
 import hmac
 import random
-from typing import List, Dict, Any, Optional
+import logging
+from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional, Union
 from composer import INSTRUMENT_TIER, compose, parse_key, MAJOR_SCALE, MINOR_SCALE
 from riffs_api.prompt_guardrails import validate_prompt
 try:
@@ -13,6 +15,8 @@ try:
     load_dotenv()
 except ImportError:
     pass
+
+logger = logging.getLogger(__name__)
 
 if not os.getenv("ANTHROPIC_API_KEY"):
     env_file = os.path.join(os.path.dirname(__file__), ".env")
@@ -250,7 +254,7 @@ def issue_license_certificate(
     chords: List[str],
     prompt: str = "",
 ) -> Dict[str, Any]:
-    """Generates a verifiable digital license certificate proving audio provenance (Day 3 Feature)."""
+    """Create a verifiable provenance record without granting or implying rights."""
     raw_payload = json.dumps({
         "key": key,
         "bpm": bpm,
@@ -261,15 +265,14 @@ def issue_license_certificate(
         ],
     }, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(raw_payload.encode("utf-8")).hexdigest()
-    license_id = f"RIFFS-LIC-{digest[:12].upper()}"
     return {
-        "license_id": license_id,
-        "status": "issued",
-        "issuer": "RIFFs Autonomous Licensing Authority",
-        "issued_at": "2026-10-13T12:00:00Z",
-        "terms": "100% Royalty-Free Commercial & Personal Use",
-        "sample_provenance": "Licensed acoustic multisamples (RIFFs Core Sound Matrix)",
+        "license_id": None,
+        "status": "provenance_only",
+        "rights_grant": False,
+        "issued_at": datetime.now(timezone.utc).isoformat(),
+        "audio_source": "deterministic symbolic score; no recorded samples included",
         "hash_sha256": digest,
+        "notice": "This provenance record is not a license or copyright clearance.",
         "metadata": {
             "key": key,
             "bpm": bpm,
@@ -280,13 +283,22 @@ def issue_license_certificate(
     }
 
 
-VOCAL_HMAC_SECRET = os.getenv("RIFFS_VOCAL_SECRET", "riffs-vocal-checkpoint-secret-2026")
+def get_vocal_hmac_secret() -> str:
+    """Return the configured vocal approval secret or raise a configuration error."""
+    secret = os.getenv("RIFFS_VOCAL_SECRET")
+    if not secret:
+        raise RuntimeError(
+            "RIFFS_VOCAL_SECRET environment variable is not configured. "
+            "Vocal approval token signing requires a configured secret."
+        )
+    return secret
 
 
 def generate_vocal_token(key: str, bpm: int, chords: List[str], lyrics_prompt: str) -> str:
     """Generate cryptographic HMAC token for the HITL vocal approval gate."""
+    secret = get_vocal_hmac_secret()
     raw = f"{key}:{bpm}:{':'.join(chords)}:{lyrics_prompt}"
-    return hmac.new(VOCAL_HMAC_SECRET.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.new(secret.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def verify_vocal_token(token: Optional[str], key: str, bpm: int, chords: List[str], lyrics_prompt: str) -> bool:
@@ -664,15 +676,16 @@ class RiffsAgent:
         locked_parts: Optional[List[str]] = None,
         seed: Optional[int] = None,
         previous_score: Optional[Dict[str, Any]] = None,
+        previous_take: Optional[Dict[str, Any]] = None,
         base_take_id: Optional[int] = None,
         issue_license: bool = False,
-        groove: str = "straight",
+        groove: Optional[str] = None,
         lyrics_prompt: Optional[str] = None,
         lyrics_language: str = "en",
         vocal_style: str = "soulful_lead",
         vocal_approved: bool = False,
         vocal_approval_token: Optional[str] = None,
-        edited_lyrics: Optional[List[Dict[str, Any]]] = None,
+        edited_lyrics: Optional[Union[List[str], List[Dict[str, Any]]]] = None,
     ) -> Dict[str, Any]:
         """
         Executes symbolic blueprint generation with part-locking and optional lyrics.
@@ -687,6 +700,10 @@ class RiffsAgent:
             validate_prompt(lyrics_prompt, allow_lyrics=True)
         else:
             validate_prompt(prompt, allow_lyrics=False)
+
+        from riffs_api.prompt_intent import resolve_groove as resolve_prompt_groove
+        groove, groove_source = resolve_prompt_groove(prompt, groove)
+
         instruments = list(instruments or ["bass_guitar", "rhythm_guitar", "cymbals"])
         asks_for_drums = bool(re.search(r"\b(?:drum(?:s|mer)?|kick|snare|hi[- ]?hat|percussion)\b", prompt or "", re.IGNORECASE))
         if asks_for_drums and "drum_kit" not in instruments:
@@ -699,6 +716,9 @@ class RiffsAgent:
             elif len(instruments) < 3:
                 instruments.append("drum_kit")
         locked_parts = locked_parts or []
+
+        if previous_score is None and previous_take:
+            previous_score = previous_take.get("score")
 
         # Day 4 Prompt Co-Pilot: Extract intent from prompt if present
         from composer import extract_musical_intent_from_prompt
@@ -731,7 +751,6 @@ class RiffsAgent:
             locked_parts=locked_parts, previous_score=previous_score,
             groove=groove,
         )
-        groove = resolve_groove(groove, score.get("feel", {}))
 
         # Keep a deterministic symbolic representation beside the UI chart data.
         # A locked lane reuses its exact note vectors and refreshes global tempo metadata.
@@ -746,7 +765,7 @@ class RiffsAgent:
             (take for take in self.take_history if take["take_id"] == base_take_id),
             None,
         ) if base_take_id is not None else (self.take_history[-1] if self.take_history else None)
-        previous_data = base_take["data"] if base_take else {}
+        previous_data = previous_take or (base_take["data"] if base_take else {})
         previous_parts = previous_data.get("part_scores", {})
         part_scores: Dict[str, Dict[str, Any]] = {}
         for inst in instruments:
@@ -789,11 +808,21 @@ class RiffsAgent:
             license_cert = {
                 "license_id": None,
                 "status": "not_issued",
+                "rights_grant": False,
                 "reason": "No verified licensed audio sample source is configured.",
             }
 
+        # Compare melodic lanes only when a local reference corpus is configured.
+        from riffs_api.originality import check_melodic_similarity
+        melody_checks = {
+            instrument: check_melodic_similarity(lane)
+            for instrument, lane in part_scores.items()
+            if lane.get("role") == "melody"
+        }
+
         # Try Anthropic Claude if API key is present
         claude_enhancement = None
+        enrichment_status = {"status": "not_configured" if not self.api_key else "pending"}
         if self.api_key:
             try:
                 import litellm
@@ -820,9 +849,28 @@ class RiffsAgent:
                 # Strip markdown code blocks if present
                 content_clean = re.sub(r"^```json\s*|\s*```$", "", content.strip())
                 claude_enhancement = json.loads(content_clean)
+                enrichment_status = {"status": "success"}
             except Exception as e:
-                # Graceful fallback: continue with deterministic symbolic engine
-                pass
+                logger.exception("Claude enrichment failed; continuing with deterministic output.")
+                enrichment_status = {"status": "failed", "error": type(e).__name__}
+
+        # Build one lightweight WAV preview from the symbolic lanes (no samples).
+        from dataclasses import replace
+        from riffs_api.audio import render_preview_wav
+        from riffs_api.score import draft_instrument_score
+        rendered_lanes = [draft_instrument_score(symbolic_score, inst, groove) for inst in instruments]
+        mixed_score = replace(symbolic_score, bars=tuple(
+            replace(bar, notes=tuple(note for lane in rendered_lanes for note in lane.bars[index].notes))
+            for index, bar in enumerate(symbolic_score.bars)
+        ))
+        audio_preview = base64.b64encode(render_preview_wav(mixed_score)).decode("ascii")
+        if issue_license:
+            provenance_payload = json.dumps({
+                "score_hash": license_cert.get("hash_sha256"),
+                "lane_midi_hashes": {name: lane["midi_sha256"] for name, lane in part_scores.items()},
+                "audio_sha256": hashlib.sha256(base64.b64decode(audio_preview)).hexdigest(),
+            }, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            license_cert["hash_sha256"] = hashlib.sha256(provenance_payload).hexdigest()
 
         # Check if lyrics/vocals were requested (Suno-style double prompting)
         final_lyrics = None
@@ -850,6 +898,7 @@ class RiffsAgent:
                     "key": key,
                     "bpm": bpm,
                     "groove": groove,
+                    "groove_source": groove_source,
                     "chords": parsed_chords,
                     "nashville_chart": nashville_chart,
                     "tab_score": tab_score,
@@ -859,11 +908,22 @@ class RiffsAgent:
                     "score": score,
                     "take_id": self._next_take_id,
                     "part_scores": part_scores,
+                    "audio_preview": {
+                        "format": "wav",
+                        "renderer": "synthetic_oscillator",
+                        "licensed_samples": False,
+                        "data_base64": audio_preview,
+                    },
+                    "melodic_similarity": melody_checks,
+                    "enrichment": enrichment_status,
                     "lyrics_draft": lyrics_draft,
                     "vocal_confirmation_token": token,
                 }
                 if claude_enhancement:
                     result_data["ai_enrichment"] = claude_enhancement
+
+                from riffs_api.take_store import store_take
+                result_data["take_storage"] = store_take(result_data)
 
                 take_id = self._next_take_id
                 self._next_take_id += 1
@@ -929,6 +989,7 @@ class RiffsAgent:
             "key": key,
             "bpm": bpm,
             "groove": groove,
+            "groove_source": groove_source,
             "chords": parsed_chords,
             "nashville_chart": nashville_chart,
             "tab_score": tab_score,
@@ -938,6 +999,14 @@ class RiffsAgent:
             "score": score,
             "take_id": self._next_take_id,
             "part_scores": part_scores,
+            "audio_preview": {
+                "format": "wav",
+                "renderer": "synthetic_oscillator",
+                "licensed_samples": False,
+                "data_base64": audio_preview,
+            },
+            "melodic_similarity": melody_checks,
+            "enrichment": enrichment_status,
         }
 
         if final_lyrics:
@@ -945,6 +1014,9 @@ class RiffsAgent:
 
         if claude_enhancement:
             result_data["ai_enrichment"] = claude_enhancement
+
+        from riffs_api.take_store import store_take
+        result_data["take_storage"] = store_take(result_data)
 
         # Store in take history for part-locking non-destructive stack
         take_id = self._next_take_id

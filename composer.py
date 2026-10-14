@@ -643,6 +643,11 @@ def compose(
         feel["swing"] = max(feel.get("swing", 0), 0.667)
     elif groove == "half_time":
         feel["kick"] = "half"
+    elif groove == "half_time_shuffle":
+        feel["swing"] = max(feel.get("swing", 0), 0.667)
+        feel["kick"] = "half"
+        if "halftime-shuffle" not in feel["tags"]:
+            feel["tags"].append("halftime-shuffle")
     symbols = [c["symbol"] for c in parsed]
 
     previous_lanes: Dict[Tuple[str, str], Dict[str, Any]] = {}
