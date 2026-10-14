@@ -64,11 +64,11 @@ def _is_explicit_exact_copy(prompt: str) -> bool:
     return False
 
 
-def validate_prompt(prompt: str) -> None:
+def validate_prompt(prompt: str, allow_lyrics: bool = False) -> None:
     """Raise before generation for requests outside RIFFs' documented scope."""
     prompt = prompt or ""
     lyric_match = _LYRICS_OR_VOCALS.search(prompt)
-    if lyric_match and lyric_match.group("negation") is None:
+    if not allow_lyrics and lyric_match and lyric_match.group("negation") is None:
         raise PromptRefusal(
             "INSTRUMENTAL_ONLY",
             "RIFFs creates instrumental accompaniment and does not generate lyrics or vocals.",

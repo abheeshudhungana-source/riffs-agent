@@ -336,6 +336,7 @@
             <button class="chart-tab-btn px-3 py-1 rounded-lg bg-amber-500 text-black font-bold" data-view="nashville">Nashville / Chords</button>
             <button class="chart-tab-btn px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200" data-view="tab">Guitar Tab</button>
             <button class="chart-tab-btn px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200" data-view="sheet">Staff Sheet</button>
+            <button class="chart-tab-btn px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200" data-view="lyrics">🎤 Lyrics</button>
           </div>
         </div>
 
@@ -380,7 +381,14 @@ E|---------------------------------------------------------5-3-0----|
 
           <!-- STAFF SHEET (HIDDEN INITIALLY) -->
           <div id="view-sheet" class="hidden text-center text-slate-400 text-xs">
-            🎼 Standard 5-line notation rendered with MusicXML engine (Treble & Bass clef).
+            🎼 Standard 5-line notation rendered with MusicXML engine (Treble &amp; Bass clef).
+          </div>
+
+          <!-- LYRICS VIEW (HIDDEN INITIALLY) -->
+          <div id="view-lyrics" class="hidden w-full text-slate-200 text-xs font-sans">
+            <div id="lyrics-lines-container" class="space-y-2">
+              <p class="text-slate-400 italic text-center py-4">No lyrics generated yet. Open "Shape the Groove" (Suno Dual Prompt) to generate lyrics!</p>
+            </div>
           </div>
         </div>
       </div>
@@ -410,24 +418,71 @@ E|---------------------------------------------------------5-3-0----|
     <div id="modal-backdrop" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
     <div class="absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg rounded-t-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl md:inset-y-0 md:my-auto md:h-fit md:rounded-2xl">
       <header class="flex items-center justify-between">
-        <h3 id="modal-title" class="text-lg font-semibold text-slate-100">Shape the Groove</h3>
+        <div>
+          <h3 id="modal-title" class="text-lg font-semibold text-slate-100 flex items-center gap-2">
+            <span>Shape the Groove</span>
+            <span class="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-mono uppercase tracking-wider">Suno Dual Prompt</span>
+          </h3>
+        </div>
         <button id="btn-close-modal" type="button" aria-label="Close" class="rounded p-1 text-slate-400 hover:text-slate-100">✕</button>
       </header>
 
-      <label for="input-style" class="mt-5 block text-xs text-slate-500">Style / Vibe</label>
-      <textarea id="input-style" rows="2" maxlength="200" placeholder="Funky neo-soul pocket with driving bass"
-                class="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none"></textarea>
+      <!-- SUNO-STYLE DOUBLE PROMPT SELECTOR TABS -->
+      <div class="mt-4 flex rounded-xl bg-slate-950 p-1 border border-slate-800 text-xs font-semibold">
+        <button type="button" id="tab-inst-prompt" class="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white transition flex items-center justify-center gap-1.5">
+          <span>🎸 1. Instrumental Vibe</span>
+        </button>
+        <button type="button" id="tab-vocal-prompt" class="flex-1 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5">
+          <span>🎤 2. Lyrics &amp; Vocal Studio</span>
+        </button>
+      </div>
 
-      <fieldset class="mt-4">
-        <legend class="text-xs text-slate-500">Genre &amp; Groove (max 2)</legend>
-        <div id="genre-chips" class="mt-2 flex flex-wrap gap-2">
-          <button type="button" data-genre="Neo-Soul" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-emerald-400 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-300">Neo-Soul</button>
-          <button type="button" data-genre="Halftime Shuffle" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-emerald-400 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-300">Halftime Shuffle</button>
-          <button type="button" data-genre="Indie Rock" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-emerald-400 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-300">Indie Rock</button>
-          <button type="button" data-genre="Lo-Fi" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-emerald-400 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-300">Lo-Fi</button>
-          <button type="button" data-genre="Walking Bass" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-emerald-400 aria-pressed:bg-emerald-500/15 aria-pressed:text-emerald-300">Walking Bass</button>
+      <!-- PROMPT PANEL 1: INSTRUMENTAL STYLE & VIBE -->
+      <div id="panel-inst-prompt" class="mt-3">
+        <label for="input-style" class="block text-xs text-slate-400">Instrumental Style / Arrangement</label>
+        <textarea id="input-style" rows="2" maxlength="200" placeholder="Funky neo-soul pocket with driving bass"
+                  class="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-indigo-400 focus:outline-none"></textarea>
+
+        <fieldset class="mt-3">
+          <legend class="text-xs text-slate-500">Genre &amp; Groove (max 2)</legend>
+          <div id="genre-chips" class="mt-1.5 flex flex-wrap gap-2">
+            <button type="button" data-genre="Neo-Soul" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-indigo-400 aria-pressed:bg-indigo-500/15 aria-pressed:text-indigo-300">Neo-Soul</button>
+            <button type="button" data-genre="Halftime Shuffle" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-indigo-400 aria-pressed:bg-indigo-500/15 aria-pressed:text-indigo-300">Halftime Shuffle</button>
+            <button type="button" data-genre="Indie Rock" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-indigo-400 aria-pressed:bg-indigo-500/15 aria-pressed:text-indigo-300">Indie Rock</button>
+            <button type="button" data-genre="Lo-Fi" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-indigo-400 aria-pressed:bg-indigo-500/15 aria-pressed:text-indigo-300">Lo-Fi</button>
+            <button type="button" data-genre="Walking Bass" aria-pressed="false" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 aria-pressed:border-indigo-400 aria-pressed:bg-indigo-500/15 aria-pressed:text-indigo-300">Walking Bass</button>
+          </div>
+        </fieldset>
+      </div>
+
+      <!-- PROMPT PANEL 2: LYRICS & VOCAL STUDIO -->
+      <div id="panel-vocal-prompt" class="mt-3 hidden">
+        <label for="input-lyrics-prompt" class="block text-xs text-slate-400">Song Lyrics Prompt / Story Topic</label>
+        <textarea id="input-lyrics-prompt" rows="2" maxlength="300" placeholder="e.g. Late night drive through the city under neon rain, longing for home..."
+                  class="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-purple-400 focus:outline-none"></textarea>
+
+        <div class="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <label for="select-lyrics-lang" class="text-xs text-slate-500">Lyrics Language</label>
+            <select id="select-lyrics-lang" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100 cursor-pointer">
+              <option value="en" selected>English</option>
+              <option value="es">Spanish (Español)</option>
+              <option value="fr">French (Français)</option>
+              <option value="ja">Japanese (日本語)</option>
+            </select>
+          </div>
+          <div>
+            <label for="select-vocal-style" class="text-xs text-slate-500">Vocal Style</label>
+            <select id="select-vocal-style" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100 cursor-pointer">
+              <option value="soulful_lead" selected>Soulful Lead</option>
+              <option value="smooth_rnb">Smooth R&amp;B</option>
+              <option value="gritty_blues">Gritty Blues</option>
+              <option value="pop_melodic">Pop Melodic</option>
+              <option value="reggae_toaster">Reggae Toaster</option>
+            </select>
+          </div>
         </div>
-      </fieldset>
+      </div>
 
       <div class="mt-4 grid grid-cols-3 gap-3">
         <div>
@@ -453,9 +508,33 @@ E|---------------------------------------------------------5-3-0----|
         </div>
       </div>
 
+      <!-- HITL VOCAL CONFIRMATION CHECKPOINT CARD -->
+      <div id="vocal-checkpoint-card" class="mt-4 hidden rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            🛡️ Human-in-the-Loop Vocal Checkpoint
+          </span>
+          <span class="text-[10px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded font-mono">Token Verified</span>
+        </div>
+        <p class="text-xs text-slate-300 mt-1.5">Review and edit the lyrics draft before authorizing voice synthesis:</p>
+        
+        <div id="checkpoint-lyrics-preview" class="mt-2.5 max-h-36 overflow-y-auto rounded-lg bg-slate-950/80 p-3 text-xs space-y-1.5 font-mono border border-slate-800 text-slate-200">
+          <!-- Populated dynamically with bar-by-bar lyrics -->
+        </div>
+
+        <label for="checkpoint-lyrics-edit" class="block text-[11px] font-semibold text-slate-400 mt-2.5">Edit Lyrics Lines (one line per bar)</label>
+        <textarea id="checkpoint-lyrics-edit" rows="3" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400"></textarea>
+
+        <div class="mt-3 flex items-center justify-end gap-2">
+          <button id="btn-cancel-vocals" type="button" class="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200">Keep Instrumental</button>
+          <button id="btn-approve-vocals" type="button" class="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-lg shadow-md transition cursor-pointer">✨ Approve &amp; Synthesize Voice</button>
+        </div>
+      </div>
+
       <p id="modal-error" role="alert" class="mt-3 hidden text-xs text-rose-400"></p>
 
-      <footer class="mt-6 flex justify-end gap-3">
+      <footer id="modal-default-footer" class="mt-6 flex justify-end gap-3">
         <button id="btn-cancel-modal" type="button" class="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-100">Cancel</button>
         <button id="btn-confirm-synthesize" type="button" class="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-40">Confirm &amp; Synthesize</button>
       </footer>
@@ -660,6 +739,53 @@ E|---------------------------------------------------------5-3-0----|
       return release(out, nOff, rel);
     }
 
+    // ---- Singing Voice: Formant-filtered vocal fold synthesizer ----
+    function vocalVoice(freq, nOff, rel, sr, vel, rng) {
+      var len = Math.min(nOff + rel, Math.floor(4.5 * sr));
+      var out = new Float32Array(len);
+      var phase = 0, vibRate = 5.2, vibDepth = 0.007;
+      var glot = 0;
+
+      function makeBp(f0, Q) {
+        var w0 = TWO_PI * f0 / sr, sinW = Math.sin(w0), cosW = Math.cos(w0);
+        var alpha = sinW / (2 * Q);
+        var a0 = 1 + alpha;
+        return {
+          b0: alpha / a0, b2: -alpha / a0,
+          a1: -2 * cosW / a0, a2: (1 - alpha) / a0,
+          x1: 0, x2: 0, y1: 0, y2: 0
+        };
+      }
+      var bp1 = makeBp(700, 3.5), bp2 = makeBp(1350, 4.0), bp3 = makeBp(2600, 5.0);
+
+      function tickBp(bp, x) {
+        var y = bp.b0 * x + bp.b2 * bp.x2 - bp.a1 * bp.y1 - bp.a2 * bp.y2;
+        bp.x2 = bp.x1; bp.x1 = x;
+        bp.y2 = bp.y1; bp.y1 = y;
+        return y;
+      }
+
+      var att = Math.max(1, Math.floor(0.04 * sr));
+      for (var n = 0; n < len; n++) {
+        var t = n / sr;
+        var vib = t > 0.15 ? Math.sin(TWO_PI * vibRate * t) * vibDepth : 0;
+        phase += (freq * (1 + vib)) / sr;
+        phase -= Math.floor(phase);
+
+        var p = phase;
+        var pulse = (p < 0.35) ? Math.sin(p / 0.35 * Math.PI) : -0.15 * Math.sin((p - 0.35) / 0.65 * Math.PI);
+        glot += 0.45 * (pulse - glot);
+
+        var fOut = tickBp(bp1, glot) * 1.3 + tickBp(bp2, glot) * 0.9 + tickBp(bp3, glot) * 0.5;
+
+        var env = n < att ? (n / att) : 1.0;
+        if (n >= nOff) env *= Math.max(0, 1 - (n - nOff) / rel);
+
+        out[n] = Math.tanh(fOut * 1.6) * env * (0.6 + 0.4 * (vel / 127));
+      }
+      return out;
+    }
+
     // ---- Percussion ----
     function kickVoice(sr, rng) {
       var len = Math.floor(0.6 * sr), out = new Float32Array(len), ph = 0, rate = decayRate(0.38, sr), env = 1, lp = 0;
@@ -744,12 +870,13 @@ E|---------------------------------------------------------5-3-0----|
     };
     var TRIM = { // per-instrument level, balanced from measured loop RMS so no part drowns the others
       bass_guitar: 1.25, contrabass: 2.0, rhythm_guitar: 1.15, ukulele: 1.6, acoustic_piano: 0.3,
-      tenor_sax: 0.33, piccolo: 0.24, bass_drums: 0.9, drum_kit: 1.1, floor_tom: 0.8, bongos: 0.7, cymbals: 1.8, triangle: 0.26
+      tenor_sax: 0.33, piccolo: 0.24, bass_drums: 0.9, drum_kit: 1.1, floor_tom: 0.8, bongos: 0.7, cymbals: 1.8, triangle: 0.26, vocal_lead: 0.85
     };
-    var PAN = { low: 0, mid: -0.25, high: 0.25 };
+    var PAN = { low: 0, mid: -0.25, high: 0.25, vocal: 0 };
 
     function voice(inst, midi, durSec, vel, sr, seed) {
       var rng = makeRng(seed), nOff = Math.max(1, Math.round(durSec * sr)), f = mtof(midi), p;
+      if (inst === 'vocal_lead') return vocalVoice(f, nOff, Math.floor(0.12 * sr), sr, vel, rng);
       if (inst === 'bass_guitar') return reggaeBassVoice(f, nOff, Math.floor(0.14 * sr), sr, vel, rng);
       if (inst === 'rhythm_guitar') return resonatorGuitarVoice(f, nOff, Math.floor(0.09 * sr), sr, vel, rng);
       if (PLUCK[inst]) {
@@ -1366,6 +1493,43 @@ E|---------------------------------------------------------5-3-0----|
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">${cardsHtml}</div>
         `;
       }
+
+      if ($('lyrics-lines-container')) {
+        if (payload.lyrics && payload.lyrics.length) {
+          const langMap = { en: 'English', es: 'Spanish (Español)', fr: 'French (Français)', ja: 'Japanese (日本語)' };
+          const styleName = (payload.vocal_style || 'vocal_lead').replace(/_/g, ' ');
+          const langName = langMap[payload.lyrics_language] || payload.lyrics_language || 'English';
+
+          let lyricsHtml = `
+            <div class="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-amber-400">🎤 Vocal Lead Track</span>
+                <span class="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded capitalize font-medium">${styleName}</span>
+                <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">${langName}</span>
+              </div>
+              <span class="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded">Synced to Chords</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          `;
+          payload.lyrics.forEach(item => {
+            lyricsHtml += `
+              <div class="border border-slate-800 bg-slate-900/60 p-3 rounded-xl flex flex-col justify-between">
+                <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono mb-1.5">
+                  <span class="font-bold text-amber-400">BAR ${item.bar}</span>
+                  <span class="bg-indigo-950 border border-indigo-800 text-indigo-300 px-1.5 py-0.5 rounded text-[10px]">${item.chord}</span>
+                </div>
+                <div class="text-sm font-medium text-slate-100 font-sans tracking-wide">"${item.text || item.lyric || ''}"</div>
+              </div>
+            `;
+          });
+          lyricsHtml += '</div>';
+          $('lyrics-lines-container').innerHTML = lyricsHtml;
+        } else {
+          $('lyrics-lines-container').innerHTML = `
+            <p class="text-slate-400 italic text-center py-6">No lyrics generated for this take. Open "Shape the Groove" (Suno Dual Prompt) to add lyrics &amp; voice!</p>
+          `;
+        }
+      }
     }
 
     // =====================================================================
@@ -1460,6 +1624,7 @@ E|---------------------------------------------------------5-3-0----|
         $('view-nashville').classList.toggle('hidden', view !== 'nashville');
         $('view-tab').classList.toggle('hidden', view !== 'tab');
         $('view-sheet').classList.toggle('hidden', view !== 'sheet');
+        if ($('view-lyrics')) $('view-lyrics').classList.toggle('hidden', view !== 'lyrics');
       });
     });
 
@@ -1468,6 +1633,19 @@ E|---------------------------------------------------------5-3-0----|
 
     // Modal Opening & Closing
     let lastFocus = null;
+    let pendingVocalData = null;
+
+    function resetVocalCheckpoint() {
+      if ($('vocal-checkpoint-card')) $('vocal-checkpoint-card').classList.add('hidden');
+      if ($('modal-default-footer')) $('modal-default-footer').classList.remove('hidden');
+      const btnApprove = $('btn-approve-vocals');
+      if (btnApprove) {
+        btnApprove.disabled = false;
+        btnApprove.innerHTML = '✨ Approve &amp; Synthesize Voice';
+      }
+      pendingVocalData = null;
+    }
+
     function openModal() {
       const v = validateChords(chordsInput.value);
       if (!v.ok) { showInline(chordsError, chordsInput, v.message); chordsInput.focus(); return; }
@@ -1475,10 +1653,19 @@ E|---------------------------------------------------------5-3-0----|
       lastFocus = document.activeElement;
       keySelect.value = guessKey(chordsInput.value) || keySelect.value;
       bpmInput.value = state.bpm;
+
+      // Reset double prompting tabs to Instrumental Vibe by default
+      if ($('panel-inst-prompt')) $('panel-inst-prompt').classList.remove('hidden');
+      if ($('panel-vocal-prompt')) $('panel-vocal-prompt').classList.add('hidden');
+      if ($('tab-inst-prompt')) $('tab-inst-prompt').className = 'flex-1 py-1.5 rounded-lg bg-indigo-600 text-white transition flex items-center justify-center gap-1.5';
+      if ($('tab-vocal-prompt')) $('tab-vocal-prompt').className = 'flex-1 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5';
+
+      resetVocalCheckpoint();
       dispatch({ type: 'OPEN_MODAL' });
       styleInput.focus();
     }
     function closeModal() {
+      resetVocalCheckpoint();
       dispatch({ type: 'CLOSE_MODAL' });
       if (lastFocus) lastFocus.focus();
     }
@@ -1505,6 +1692,26 @@ E|---------------------------------------------------------5-3-0----|
         else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
       }
     });
+
+    // Suno-Style Double Prompt Tab Switching
+    if ($('tab-inst-prompt')) {
+      $('tab-inst-prompt').addEventListener('click', () => {
+        $('tab-inst-prompt').className = 'flex-1 py-1.5 rounded-lg bg-indigo-600 text-white transition flex items-center justify-center gap-1.5';
+        $('tab-vocal-prompt').className = 'flex-1 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5';
+        $('panel-inst-prompt').classList.remove('hidden');
+        $('panel-vocal-prompt').classList.add('hidden');
+      });
+    }
+
+    if ($('tab-vocal-prompt')) {
+      $('tab-vocal-prompt').addEventListener('click', () => {
+        $('tab-vocal-prompt').className = 'flex-1 py-1.5 rounded-lg bg-indigo-600 text-white transition flex items-center justify-center gap-1.5';
+        $('tab-inst-prompt').className = 'flex-1 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5';
+        $('panel-vocal-prompt').classList.remove('hidden');
+        $('panel-inst-prompt').classList.add('hidden');
+        if ($('input-lyrics-prompt')) $('input-lyrics-prompt').focus();
+      });
+    }
 
     // Genre Chips Selection
     $('genre-chips').addEventListener('click', (e) => {
@@ -1576,6 +1783,10 @@ E|---------------------------------------------------------5-3-0----|
       const prevScore = activeTake && activeTake.payload ? activeTake.payload.score : null;
       const nextSeed = state.takes.length + 1;
 
+      const lyricsPrompt = ($('input-lyrics-prompt') ? $('input-lyrics-prompt').value : '').trim();
+      const lyricsLang = $('select-lyrics-lang') ? $('select-lyrics-lang').value : 'en';
+      const vocalStyle = $('select-vocal-style') ? $('select-vocal-style').value : 'soulful_lead';
+
       const payload = {
         prompt: promptText,
         key: keySelect.value,
@@ -1587,6 +1798,12 @@ E|---------------------------------------------------------5-3-0----|
         previous_score: prevScore,
         groove: state.groove || 'straight',
       };
+
+      if (lyricsPrompt) {
+        payload.lyrics_prompt = lyricsPrompt;
+        payload.lyrics_language = lyricsLang;
+        payload.vocal_style = vocalStyle;
+      }
 
       dispatch({ type: 'GENERATE_START' });
       try {
@@ -1605,6 +1822,34 @@ E|---------------------------------------------------------5-3-0----|
         let json = {};
         try { json = await res.json(); } catch (_) {}
         const d = (json && json.data) || {};
+
+        // HUMAN-IN-THE-LOOP CHECKPOINT: lyrics draft generated, awaiting user authorization for voice synthesis
+        if (d.status === 'awaiting_vocal_confirmation') {
+          pendingVocalData = {
+            token: d.vocal_confirmation_token,
+            takeData: d,
+            payload: payload,
+          };
+          dispatch({ type: 'CLEAR_ERROR' });
+          if ($('modal-default-footer')) $('modal-default-footer').classList.add('hidden');
+          if ($('vocal-checkpoint-card')) $('vocal-checkpoint-card').classList.remove('hidden');
+
+          const draft = d.lyrics_draft || {};
+          const bars = draft.bars || [];
+          let previewHtml = '';
+          bars.forEach(b => {
+            previewHtml += `
+              <div class="flex items-center gap-2 py-1 px-2 rounded bg-slate-900 border border-slate-800">
+                <span class="text-amber-400 font-bold text-[10px] w-14">BAR ${b.bar}</span>
+                <span class="text-indigo-400 text-[10px] font-mono w-16">[${b.chord}]</span>
+                <span class="text-slate-200 font-sans text-xs">"${b.text || b.lyric || ''}"</span>
+              </div>`;
+          });
+          if ($('checkpoint-lyrics-preview')) $('checkpoint-lyrics-preview').innerHTML = previewHtml;
+          if ($('checkpoint-lyrics-edit')) $('checkpoint-lyrics-edit').value = bars.map(b => b.text || b.lyric || '').join('\n');
+          return;
+        }
+
         const newTakeData = {
           key: d.key || payload.key,
           bpm: d.bpm || payload.bpm,
@@ -1612,6 +1857,9 @@ E|---------------------------------------------------------5-3-0----|
           chords: d.chords || (payload.chords ? payload.chords.split(/[\s,|\-–—]+/).filter(Boolean) : []),
           nashville_chart: d.nashville_chart || [],
           tab_score: d.tab_score || '',
+          lyrics: d.lyrics || null,
+          lyrics_language: d.lyrics_language || payload.lyrics_language,
+          vocal_style: d.vocal_style || payload.vocal_style,
           stems: d.stems || [],
           part_scores: d.part_scores || {},
           license_certificate: d.license_certificate || null,
@@ -1639,6 +1887,127 @@ E|---------------------------------------------------------5-3-0----|
         dispatch({ type: 'GENERATE_FAIL', error: { code: 'NETWORK', message: "Couldn't reach the band. Try again." } });
       }
     });
+
+    // Checkpoint Action 1: Cancel Vocals (Keep Instrumental Track)
+    if ($('btn-cancel-vocals')) {
+      $('btn-cancel-vocals').addEventListener('click', () => {
+        if (!pendingVocalData) { resetVocalCheckpoint(); closeModal(); return; }
+        const d = pendingVocalData.takeData;
+        const payload = pendingVocalData.payload;
+        const nextSeed = state.takes.length + 1;
+        const newTakeData = {
+          key: d.key || payload.key,
+          bpm: d.bpm || payload.bpm,
+          groove: d.groove || payload.groove || 'straight',
+          chords: d.chords || (payload.chords ? payload.chords.split(/[\s,|\-–—]+/).filter(Boolean) : []),
+          nashville_chart: d.nashville_chart || [],
+          tab_score: d.tab_score || '',
+          lyrics: null,
+          stems: d.stems || [],
+          part_scores: d.part_scores || {},
+          license_certificate: d.license_certificate || null,
+          seed: d.seed || nextSeed,
+          score: d.score || null,
+        };
+        resetVocalCheckpoint();
+        closeModal();
+        dispatch({ type: 'GENERATE_SUCCESS', data: newTakeData });
+        if (newTakeData.score) {
+          startAudioPlayback(newTakeData.score, newTakeData.bpm);
+        }
+      });
+    }
+
+    // Checkpoint Action 2: Approve & Synthesize Voice with Token + Edited Lyrics
+    if ($('btn-approve-vocals')) {
+      $('btn-approve-vocals').addEventListener('click', async () => {
+        if (!pendingVocalData) return;
+        const btnApprove = $('btn-approve-vocals');
+        btnApprove.disabled = true;
+        btnApprove.innerHTML = '✨ Synthesizing Vocal Voice…';
+
+        const rawEdited = ($('checkpoint-lyrics-edit') ? $('checkpoint-lyrics-edit').value : '').trim();
+        const editedLines = rawEdited ? rawEdited.split('\n').map(l => l.trim()).filter(Boolean) : null;
+        const { token, takeData, payload } = pendingVocalData;
+
+        try {
+          const approvePayload = {
+            token: token,
+            lyrics_prompt: takeData.lyrics_prompt || payload.lyrics_prompt || 'Vocal song sketch',
+            key: takeData.key || payload.key || 'Am',
+            bpm: takeData.bpm || payload.bpm || 110,
+            groove: takeData.groove || payload.groove || 'straight',
+            chords: chordsInput.value.trim() || 'Am - F - C - G',
+            instruments: payload.instruments,
+            seed: takeData.seed,
+            vocal_style: takeData.vocal_style || payload.vocal_style || 'soulful_lead',
+            lyrics_language: takeData.lyrics_language || payload.lyrics_language || 'en',
+            edited_lyrics: editedLines,
+          };
+
+          const res = await fetch('/api/vocals/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(approvePayload),
+          });
+
+          if (!res.ok) {
+            let msg = "Could not synthesize vocal voice. Please try again.";
+            try { const j = await res.json(); if (j && j.detail) msg = j.detail; } catch (_) {}
+            modalError.textContent = msg;
+            modalError.classList.remove('hidden');
+            btnApprove.disabled = false;
+            btnApprove.innerHTML = '✨ Approve &amp; Synthesize Voice';
+            return;
+          }
+
+          const json = await res.json();
+          const d = (json && json.data) || {};
+          const nextSeed = state.takes.length + 1;
+          const newTakeData = {
+            key: d.key || payload.key,
+            bpm: d.bpm || payload.bpm,
+            groove: d.groove || payload.groove || 'straight',
+            chords: d.chords || (payload.chords ? payload.chords.split(/[\s,|\-–—]+/).filter(Boolean) : []),
+            nashville_chart: d.nashville_chart || [],
+            tab_score: d.tab_score || '',
+            lyrics: d.lyrics || null,
+            lyrics_language: d.lyrics_language || payload.lyrics_language,
+            vocal_style: d.vocal_style || payload.vocal_style,
+            stems: d.stems || [],
+            part_scores: d.part_scores || {},
+            license_certificate: d.license_certificate || null,
+            seed: d.seed || nextSeed,
+            score: d.score || null,
+          };
+
+          resetVocalCheckpoint();
+          closeModal();
+          dispatch({ type: 'GENERATE_SUCCESS', data: newTakeData });
+
+          // Auto-switch to Lyrics tab in Score & Chart view
+          document.querySelectorAll('.chart-tab-btn').forEach(b => {
+            const isLyrics = b.dataset.view === 'lyrics';
+            b.className = isLyrics
+              ? 'chart-tab-btn px-3 py-1 rounded-lg bg-amber-500 text-black font-bold'
+              : 'chart-tab-btn px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200';
+          });
+          $('view-nashville').classList.add('hidden');
+          $('view-tab').classList.add('hidden');
+          $('view-sheet').classList.add('hidden');
+          if ($('view-lyrics')) $('view-lyrics').classList.remove('hidden');
+
+          if (newTakeData.score) {
+            startAudioPlayback(newTakeData.score, newTakeData.bpm);
+          }
+        } catch (err) {
+          modalError.textContent = "Network error approving vocals. Try again.";
+          modalError.classList.remove('hidden');
+          btnApprove.disabled = false;
+          btnApprove.innerHTML = '✨ Approve &amp; Synthesize Voice';
+        }
+      });
+    }
 
     // Groove Preset listeners
     document.querySelectorAll('.groove-pill-btn').forEach(btn => {

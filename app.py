@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Literal, Optional, List, Dict, Any
+from typing import Literal, Optional, List, Dict, Any, Union
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -54,6 +54,12 @@ class GenerateRequest(BaseModel):
     base_take_id: Optional[int] = None
     issue_license: Optional[bool] = True
     groove: Literal["straight", "half_time", "swing"] = "straight"
+    lyrics_prompt: Optional[str] = None
+    lyrics_language: Optional[str] = "en"
+    vocal_style: Optional[str] = "soulful_lead"
+    vocal_approved: Optional[bool] = False
+    vocal_approval_token: Optional[str] = None
+    edited_lyrics: Optional[Union[List[str], List[Dict[str, Any]]]] = None
 
 
 ALLOWED_INSTRUMENTS = {
@@ -193,6 +199,12 @@ async def generate_riff(req: GenerateRequest):
             base_take_id=req.base_take_id,
             issue_license=True if req.issue_license is None else req.issue_license,
             groove=req.groove,
+            lyrics_prompt=req.lyrics_prompt,
+            lyrics_language=req.lyrics_language or "en",
+            vocal_style=req.vocal_style or "soulful_lead",
+            vocal_approved=bool(req.vocal_approved),
+            vocal_approval_token=req.vocal_approval_token,
+            edited_lyrics=req.edited_lyrics,
         )
         return {
             "status": "success",
@@ -235,6 +247,45 @@ async def generate_riff(req: GenerateRequest):
                 "detail": str(exc)
             }
         )
+
+
+class VocalApproveRequest(BaseModel):
+    token: str
+    lyrics_prompt: str
+    key: Optional[str] = "Am"
+    bpm: Optional[int] = 110
+    chords: Optional[str] = "Am - F - C - G"
+    instruments: Optional[List[str]] = Field(default_factory=lambda: ["bass_guitar", "rhythm_guitar", "cymbals"])
+    edited_lyrics: Optional[Union[List[str], List[Dict[str, Any]]]] = None
+    seed: Optional[int] = None
+    groove: Literal["straight", "half_time", "swing"] = "straight"
+    vocal_style: Optional[str] = "soulful_lead"
+    lyrics_language: Optional[str] = "en"
+
+
+@app.post("/api/vocals/approve")
+async def approve_vocal_track(req: VocalApproveRequest):
+    try:
+        data = RiffsAgent().generate(
+            prompt="Accompaniment with lead vocal track",
+            key=req.key or "Am",
+            bpm=req.bpm or 110,
+            chords=req.chords or "Am - F - C - G",
+            instruments=req.instruments or ["bass_guitar", "rhythm_guitar", "cymbals"],
+            seed=req.seed,
+            groove=req.groove,
+            lyrics_prompt=req.lyrics_prompt,
+            lyrics_language=req.lyrics_language or "en",
+            vocal_style=req.vocal_style or "soulful_lead",
+            vocal_approved=True,
+            vocal_approval_token=req.token,
+            edited_lyrics=req.edited_lyrics,
+        )
+        return {"status": "success", "data": data}
+    except ValueError as exc:
+        return JSONResponse(status_code=403, content={"status": "error", "code": "VOCAL_AUTH_FAILED", "detail": str(exc)})
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"status": "error", "code": "VOCAL_RENDER_FAILED", "detail": str(exc)})
 
 
 class VideoRemuxRequest(BaseModel):

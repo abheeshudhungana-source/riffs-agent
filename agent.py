@@ -3,8 +3,10 @@ import re
 import json
 import hashlib
 import base64
+import hmac
+import random
 from typing import List, Dict, Any, Optional
-from composer import INSTRUMENT_TIER, compose
+from composer import INSTRUMENT_TIER, compose, parse_key, MAJOR_SCALE, MINOR_SCALE
 from riffs_api.prompt_guardrails import validate_prompt
 try:
     from dotenv import load_dotenv
@@ -278,6 +280,177 @@ def issue_license_certificate(
     }
 
 
+VOCAL_HMAC_SECRET = os.getenv("RIFFS_VOCAL_SECRET", "riffs-vocal-checkpoint-secret-2026")
+
+
+def generate_vocal_token(key: str, bpm: int, chords: List[str], lyrics_prompt: str) -> str:
+    """Generate cryptographic HMAC token for the HITL vocal approval gate."""
+    raw = f"{key}:{bpm}:{':'.join(chords)}:{lyrics_prompt}"
+    return hmac.new(VOCAL_HMAC_SECRET.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def verify_vocal_token(token: Optional[str], key: str, bpm: int, chords: List[str], lyrics_prompt: str) -> bool:
+    """Verify cryptographic HMAC token to prevent unauthorized execution."""
+    if not token:
+        return False
+    expected = generate_vocal_token(key, bpm, chords, lyrics_prompt)
+    return hmac.compare_digest(token, expected)
+
+
+def parse_root_pitch_class(chord: str) -> int:
+    """Extract root pitch class (0-11) from chord symbol."""
+    m = re.match(r"^([A-G][#b]?)", chord or "C")
+    if not m:
+        return 0
+    root = normalize_root(m.group(1))
+    return CHROMATIC_SCALE.index(root) if root in CHROMATIC_SCALE else 0
+
+
+LYRICS_TEMPLATES = {
+    "en": [
+        "Walking through the shadows in the midnight rain",
+        "Looking for a feeling that can ease this pain",
+        "Every little echo whispering your name",
+        "Chasing down the moments we can never claim",
+        "Neon lights are burning like a gentle fire",
+        "Climbing up the rhythm taking us up higher",
+        "Nothing left to lose and nothing to regret",
+        "Writing down the melody we won't forget",
+    ],
+    "es": [
+        "Caminando solo bajo la ciudad",
+        "Buscando en la noche nuestra libertad",
+        "Cada melodía suena con verdad",
+        "Llevo tu recuerdo en la oscuridad",
+        "Luces de colores brillan en el mar",
+        "Siento que este ritmo me va a transformar",
+        "Nada que perder y todo por ganar",
+        "Esta noche eterna vamos a cantar",
+    ],
+    "fr": [
+        "Dans la nuit profonde sous la pluie dorée",
+        "Je cherche la flamme qui m'a inspiré",
+        "Chaque douce note me fait espérer",
+        "Un nouveau voyage pour recommencer",
+    ],
+    "ja": [
+        "夜の街を歩きながら光を探す",
+        "静かな雨が心を満たしてゆく",
+        "重なるメロディが響き渡る",
+        "新しい朝に向かって走り出す",
+    ],
+}
+
+
+def draft_bar_aligned_lyrics(
+    chords: List[str],
+    key: str,
+    bpm: int,
+    prompt: str,
+    language: str = "en",
+    vocal_style: str = "soulful_lead",
+    api_key: Optional[str] = None,
+    model_id: str = "anthropic/claude-sonnet-5-5",
+) -> Dict[str, Any]:
+    """Draft lyrics aligned bar-by-bar with chords matching language and vocal style."""
+    bars_count = max(4, len(chords))
+
+    if api_key and prompt:
+        try:
+            import litellm
+            sys_msg = (
+                f"You are a master lyricist and vocal arranger. Write {bars_count} bar-aligned lines of lyrics.\n"
+                f"Language: {language}.\nVocal Style: {vocal_style}.\n"
+                f"Chord Progression: {chords}.\nKey: {key}, BPM: {bpm}.\n"
+                "Return pure JSON with schema:\n"
+                '{"bars": [{"bar": 1, "chord": "...", "text": "...", "syllables": 7}, ...], "rhyme_scheme": "AABB", "theme": "..."}'
+            )
+            resp = litellm.completion(
+                model=model_id,
+                messages=[
+                    {"role": "system", "content": sys_msg},
+                    {"role": "user", "content": f"Theme / Lyric Prompt: {prompt}"}
+                ],
+                api_key=api_key,
+                max_tokens=1000
+            )
+            raw = resp.choices[0].message.content
+            clean = re.sub(r"^```json\s*|\s*```$", "", raw.strip())
+            data = json.loads(clean)
+            if "bars" in data and len(data["bars"]) >= len(chords):
+                for i, b in enumerate(data["bars"]):
+                    b["chord"] = chords[i % len(chords)]
+                data["language"] = language
+                data["vocal_style"] = vocal_style
+                return data
+        except Exception:
+            pass
+
+    pool = LYRICS_TEMPLATES.get(language, LYRICS_TEMPLATES["en"])
+    bars = []
+    for i in range(bars_count):
+        chord = chords[i % len(chords)]
+        line = pool[i % len(pool)]
+        if i == 0 and prompt and len(prompt.split()) <= 6:
+            suffix_map = {
+                "en": " in the night",
+                "es": " en la noche",
+                "fr": " dans la nuit",
+                "ja": " 夜の彼方へ",
+            }
+            line = f"{prompt.capitalize()}{suffix_map.get(language, ' in the night')}"
+        syllables = len(re.findall(r"[aeiouy]+", line.lower())) or 7
+        bars.append({
+            "bar": i + 1,
+            "chord": chord,
+            "text": line,
+            "syllables": syllables,
+        })
+
+    return {
+        "bars": bars,
+        "language": language,
+        "vocal_style": vocal_style,
+        "rhyme_scheme": "AABB" if bars_count == 4 else "AABBCCDD",
+        "theme": prompt or "Melodic sketch",
+    }
+
+
+def _generate_vocal_melody_events(
+    chords: List[str],
+    key: str,
+    lyrics_bars: List[Dict[str, Any]],
+    seed: int = 1,
+) -> List[Dict[str, Any]]:
+    """Synthesize vocal note events mapped to lyrics syllables and chord tones."""
+    events = []
+    rng = random.Random(seed * 31337)
+
+    for i, bar_info in enumerate(lyrics_bars):
+        chord_sym = bar_info.get("chord") or chords[i % len(chords)]
+        bar_start = i * 4.0
+        chord_root = parse_root_pitch_class(chord_sym)
+        base_octave = 60
+        r = base_octave + (chord_root % 12)
+        third_interval = 3 if ("m" in chord_sym and not chord_sym.startswith("maj")) else 4
+        third = base_octave + ((chord_root + third_interval) % 12)
+        fifth = base_octave + ((chord_root + 7) % 12)
+
+        pitches = [r, third, fifth, r + 12 if rng.random() > 0.5 else third]
+        words = (bar_info.get("text") or bar_info.get("lyric") or "").split()
+
+        for step in range(4):
+            word_snip = words[step % len(words)] if words else ""
+            events.append({
+                "beat": round(bar_start + step * 1.0, 3),
+                "dur": 0.85,
+                "midi": pitches[step % len(pitches)],
+                "vel": 88 + (step == 0) * 8,
+                "lyric": word_snip,
+            })
+    return events
+
+
 class RiffsAgent:
     """
     Autonomous AI Practice & Sketching Partner for Musicians.
@@ -303,16 +476,26 @@ class RiffsAgent:
         base_take_id: Optional[int] = None,
         issue_license: bool = False,
         groove: str = "straight",
+        lyrics_prompt: Optional[str] = None,
+        lyrics_language: str = "en",
+        vocal_style: str = "soulful_lead",
+        vocal_approved: bool = False,
+        vocal_approval_token: Optional[str] = None,
+        edited_lyrics: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
-        Executes symbolic blueprint generation with part-locking.
+        Executes symbolic blueprint generation with part-locking and optional lyrics.
 
         The notes are written first (`score`); the browser renders them to sound.
         Locked lanes are copied verbatim from `previous_score` (or, when omitted,
         from this agent's most recent take), so they cannot drift between takes.
         """
         # Enforce product boundaries before doing score work or calling an LLM.
-        validate_prompt(prompt)
+        if lyrics_prompt:
+            validate_prompt(prompt, allow_lyrics=True)
+            validate_prompt(lyrics_prompt, allow_lyrics=True)
+        else:
+            validate_prompt(prompt, allow_lyrics=False)
         instruments = list(instruments or ["bass_guitar", "rhythm_guitar", "cymbals"])
         asks_for_drums = bool(re.search(r"\b(?:drum(?:s|mer)?|kick|snare|hi[- ]?hat|percussion)\b", prompt or "", re.IGNORECASE))
         if asks_for_drums and "drum_kit" not in instruments:
@@ -450,7 +633,102 @@ class RiffsAgent:
                 # Graceful fallback: continue with deterministic symbolic engine
                 pass
 
+        # Check if lyrics/vocals were requested (Suno-style double prompting)
+        final_lyrics = None
+        if lyrics_prompt:
+            token = generate_vocal_token(key, bpm, parsed_chords, lyrics_prompt)
+
+            if not vocal_approved:
+                # Human-In-The-Loop Checkpoint: Halt before vocal audio synthesis
+                lyrics_draft = draft_bar_aligned_lyrics(
+                    chords=parsed_chords,
+                    key=key,
+                    bpm=bpm,
+                    prompt=lyrics_prompt,
+                    language=lyrics_language,
+                    vocal_style=vocal_style,
+                    api_key=self.api_key,
+                    model_id=self.model_id,
+                )
+                result_data = {
+                    "status": "awaiting_vocal_confirmation",
+                    "checkpoint": "HUMAN_IN_THE_LOOP_VOCAL_APPROVAL",
+                    "key": key,
+                    "bpm": bpm,
+                    "groove": groove,
+                    "chords": parsed_chords,
+                    "nashville_chart": nashville_chart,
+                    "tab_score": tab_score,
+                    "stems": stems,
+                    "license_certificate": license_cert,
+                    "seed": seed,
+                    "score": score,
+                    "take_id": self._next_take_id,
+                    "part_scores": part_scores,
+                    "lyrics_draft": lyrics_draft,
+                    "vocal_confirmation_token": token,
+                }
+                if claude_enhancement:
+                    result_data["ai_enrichment"] = claude_enhancement
+
+                take_id = self._next_take_id
+                self._next_take_id += 1
+                self.take_history.append({"take_id": take_id, "data": result_data})
+                del self.take_history[:-5]
+                return result_data
+
+            # Human has approved! Verify cryptographic confirmation token
+            if not verify_vocal_token(vocal_approval_token, key, bpm, parsed_chords, lyrics_prompt):
+                raise ValueError("Invalid or forged vocal approval token. Confirmation rejected.")
+
+            if edited_lyrics:
+                norm_lyrics = []
+                for idx, item in enumerate(edited_lyrics):
+                    c = parsed_chords[idx % len(parsed_chords)]
+                    if isinstance(item, str):
+                        norm_lyrics.append({"bar": idx + 1, "chord": c, "text": item})
+                    elif isinstance(item, dict):
+                        text = item.get("text") or item.get("lyric") or ""
+                        norm_lyrics.append({
+                            "bar": item.get("bar", idx + 1),
+                            "chord": item.get("chord") or c,
+                            "text": text,
+                        })
+                final_lyrics = norm_lyrics
+            else:
+                final_lyrics = draft_bar_aligned_lyrics(
+                    chords=parsed_chords,
+                    key=key,
+                    bpm=bpm,
+                    prompt=lyrics_prompt,
+                    language=lyrics_language,
+                    vocal_style=vocal_style,
+                    api_key=self.api_key,
+                    model_id=self.model_id,
+                ).get("bars", [])
+
+            vocal_events = _generate_vocal_melody_events(parsed_chords, key, final_lyrics, seed)
+            vocal_lane = {
+                "tier": "vocal",
+                "instrument": "vocal_lead",
+                "locked": False,
+                "source": "generated",
+                "hash": hashlib.sha256(json.dumps(vocal_events, sort_keys=True).encode()).hexdigest(),
+                "events": vocal_events,
+            }
+            score["lanes"].append(vocal_lane)
+            stems.append({
+                "lane": "vocal_lead",
+                "role": "lead",
+                "filename": f"riff_{key}_{bpm}bpm_vocal_lead.mid",
+                "locked": False,
+                "available": True,
+                "format": "midi",
+                "lyrics": final_lyrics,
+            })
+
         result_data = {
+            "status": "success",
             "key": key,
             "bpm": bpm,
             "groove": groove,
@@ -464,6 +742,9 @@ class RiffsAgent:
             "take_id": self._next_take_id,
             "part_scores": part_scores,
         }
+
+        if final_lyrics:
+            result_data["lyrics"] = final_lyrics
 
         if claude_enhancement:
             result_data["ai_enrichment"] = claude_enhancement
