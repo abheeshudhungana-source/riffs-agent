@@ -102,6 +102,22 @@ _LOCK_ALIASES = {
     "drums": {"bass_drums", "floor_tom", "bongos", "cymbals", "triangle"},
 }
 
+FEEL_TO_GROOVE = {
+    "halftime-shuffle": "half_time",
+    "half-time": "half_time",
+    "swing": "swing",
+}
+
+
+def resolve_groove(requested: str, feel: dict) -> str:
+    """Explicit non-default request wins; otherwise infer from composer feel tags."""
+    if requested and requested != "straight":
+        return requested
+    for tag in feel.get("tags", []):
+        if tag in FEEL_TO_GROOVE:
+            return FEEL_TO_GROOVE[tag]
+    return requested or "straight"
+
 
 def _locked_part(instrument: str, locked_parts: List[str]) -> bool:
     lane = instrument.lower()
@@ -321,6 +337,7 @@ class RiffsAgent:
             locked_parts=locked_parts, previous_score=previous_score,
             groove=groove,
         )
+        groove = resolve_groove(groove, score.get("feel", {}))
 
         # Keep a deterministic symbolic representation beside the UI chart data.
         # A locked lane reuses its exact note vectors and refreshes global tempo metadata.

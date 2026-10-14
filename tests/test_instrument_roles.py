@@ -175,6 +175,33 @@ class InstrumentRoleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unsupported groove"):
             draft_instrument_score(self.score, "bass_guitar", "shuffle-ish")
 
+    def test_prompt_feel_resolves_to_groove_preset(self):
+        agent = RiffsAgent()
+        # When groove is default 'straight', but prompt mentions halftime shuffle
+        take = agent.generate(
+            prompt="give me a halftime shuffle",
+            key="C major",
+            bpm=90,
+            chords="C - G - Am - F",
+            instruments=["bass_guitar", "rhythm_guitar"],
+            groove="straight",
+        )
+        self.assertEqual(take["groove"], "half_time")
+        self.assertEqual(take["part_scores"]["bass_guitar"]["groove"], "half_time")
+        self.assertEqual(take["part_scores"]["rhythm_guitar"]["groove"], "half_time")
+
+        # Explicit non-straight groove overrides prompt feel
+        take_explicit = agent.generate(
+            prompt="give me a halftime shuffle",
+            key="C major",
+            bpm=90,
+            chords="C - G - Am - F",
+            instruments=["bass_guitar"],
+            groove="swing",
+        )
+        self.assertEqual(take_explicit["groove"], "swing")
+        self.assertEqual(take_explicit["part_scores"]["bass_guitar"]["groove"], "swing")
+
 
 if __name__ == "__main__":
     unittest.main()
