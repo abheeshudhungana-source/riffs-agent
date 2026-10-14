@@ -42,6 +42,7 @@ scratch/
 outputs/
 .riffs_takes/
 .riffs-agent/
+riffs_trash/
 *.wav
 *.mp3
 *.mp4
