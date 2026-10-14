@@ -125,7 +125,7 @@
             <div class="border border-slate-800 bg-slate-950/70 p-2 rounded-xl flex flex-col gap-1">
               <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Low End</span>
               <select id="select-inst-low" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:border-amber-400 transition cursor-pointer">
-                <option value="bass_guitar" selected>Bass Guitar</option>
+                <option value="bass_guitar" selected>Bass Guitar (Warm Reggae)</option>
                 <option value="contrabass">Contrabass</option>
                 <option value="none">None (Off)</option>
               </select>
@@ -135,7 +135,7 @@
             <div class="border border-slate-800 bg-slate-950/70 p-2 rounded-xl flex flex-col gap-1">
               <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Mid End</span>
               <select id="select-inst-mid" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:border-indigo-400 transition cursor-pointer">
-                <option value="rhythm_guitar" selected>Rhythm Guitar</option>
+                <option value="rhythm_guitar" selected>Rhythm Guitar (Crunch Resonator)</option>
                 <option value="acoustic_piano">Acoustic Piano</option>
                 <option value="tenor_sax">Tenor Sax</option>
                 <option value="none">None (Off)</option>
@@ -532,6 +532,87 @@ E|---------------------------------------------------------5-3-0----|
       return out;
     }
 
+    // ---- Warm Reggae Dub Bass: deep round fundamental, soft thumb attack, zero fuzz ----
+    function reggaeBassVoice(freq, nOff, rel, sr, vel, rng) {
+      var len = Math.min(nOff + rel, Math.floor(4.5 * sr));
+      var D = sr / freq - 0.5;
+      var N = Math.max(3, Math.floor(D - 0.5));
+      var d = D - N, C = (1 - d) / (1 + d);
+      var t60 = 1.85; // deep warm sustain
+      var rho = Math.min(0.9995, Math.pow(10, -3 / (t60 * freq)));
+      var buf = new Float32Array(N), tmp = new Float32Array(N), i, lp = 0;
+      // Soft thumb attack on flatwound string: very gentle noise filter
+      var bright = 0.045 + 0.02 * (vel / 127);
+      for (i = 0; i < N; i++) { lp += bright * ((rng() * 2 - 1) - lp); tmp[i] = lp; }
+      var pk = Math.max(1, Math.floor(N * 0.08)), energy = 0;
+      for (i = 0; i < N; i++) { buf[i] = tmp[i] - tmp[(i + pk) % N]; energy += buf[i] * buf[i]; }
+      var norm = 0.32 / Math.sqrt(energy / N + 1e-12);
+      for (i = 0; i < N; i++) buf[i] *= norm;
+      var out = new Float32Array(len), idx = 0, x1 = 0, y1 = 0;
+      for (var n = 0; n < len; n++) {
+        var cur = buf[idx], nx = idx + 1 === N ? 0 : idx + 1;
+        var x = rho * 0.5 * (cur + buf[nx]);
+        var y = C * x + x1 - C * y1;
+        x1 = x; y1 = y;
+        buf[idx] = y; out[n] = cur; idx = nx;
+      }
+      release(out, nOff, rel);
+      // Soften initial transient click: 6ms smooth thumb rise
+      var attack = Math.min(out.length, Math.floor(0.006 * sr));
+      for (var a = 0; a < attack; a++) out[a] *= (a / attack);
+      // Two-stage low-pass filtering for warm, dark reggae tone:
+      onePoleLow(out, 0.048);
+      onePoleLow(out, 0.065);
+      return out;
+    }
+
+    // ---- Crunchy Resonator Guitar: metallic Dobro cone formant + acoustic biscuit crunch ----
+    function resonatorGuitarVoice(freq, nOff, rel, sr, vel, rng) {
+      var len = Math.min(nOff + rel, Math.floor(4 * sr));
+      var D = sr / freq - 0.5;
+      var N = Math.max(3, Math.floor(D - 0.5));
+      var d = D - N, C = (1 - d) / (1 + d);
+      var t60 = 1.7;
+      var rho = Math.min(0.9995, Math.pow(10, -3 / (t60 * freq)));
+      var buf = new Float32Array(N), tmp = new Float32Array(N), i, lp = 0;
+      // High pluck brightness near biscuit bridge (pick position 0.30)
+      var bright = 0.60 + 0.35 * (vel / 127);
+      for (i = 0; i < N; i++) { lp += bright * ((rng() * 2 - 1) - lp); tmp[i] = lp; }
+      var pk = Math.max(1, Math.floor(N * 0.30)), energy = 0;
+      for (i = 0; i < N; i++) { buf[i] = tmp[i] - tmp[(i + pk) % N]; energy += buf[i] * buf[i]; }
+      var norm = 0.35 / Math.sqrt(energy / N + 1e-12);
+      for (i = 0; i < N; i++) buf[i] *= norm;
+      var strOut = new Float32Array(len), idx = 0, x1 = 0, y1 = 0;
+      for (var n = 0; n < len; n++) {
+        var cur = buf[idx], nx = idx + 1 === N ? 0 : idx + 1;
+        var x = rho * 0.5 * (cur + buf[nx]);
+        var y = C * x + x1 - C * y1;
+        x1 = x; y1 = y;
+        buf[idx] = y; strOut[n] = cur; idx = nx;
+      }
+      release(strOut, nOff, rel);
+      // Resonator cone bandpass formant (aluminum spun cone resonance ~2200 Hz, Q = 2.4)
+      var f0 = 2200, Q = 2.4;
+      var w0 = TWO_PI * f0 / sr, cosW = Math.cos(w0), sinW = Math.sin(w0);
+      var alpha = sinW / (2 * Q);
+      var b0 = alpha, b1 = 0, b2 = -alpha, a0 = 1 + alpha, a1 = -2 * cosW, a2 = 1 - alpha;
+      var invA0 = 1 / a0;
+      b0 *= invA0; b2 *= invA0; a1 *= invA0; a2 *= invA0;
+      var bp1 = 0, bp2 = 0, xPrev1 = 0, xPrev2 = 0;
+      var out = new Float32Array(len);
+      var drive = 1.35 + 0.75 * (vel / 127);
+      for (var k = 0; k < len; k++) {
+        var s = strOut[k];
+        var bp = b0 * s + b2 * xPrev2 - a1 * bp1 - a2 * bp2;
+        xPrev2 = xPrev1; xPrev1 = s;
+        bp2 = bp1; bp1 = bp;
+        // Blend dry string with intense aluminum cone formant + acoustic biscuit saturation
+        var cone = 0.62 * s + 1.5 * bp;
+        out[k] = Math.tanh(cone * drive) * 0.76;
+      }
+      return out;
+    }
+
     // ---- Piano: inharmonic additive partials with per-partial decay ----
     function pianoVoice(midi, nOff, rel, sr, vel, rng) {
       var f = mtof(midi), len = Math.min(nOff + rel, Math.floor(5 * sr));
@@ -658,19 +739,19 @@ E|---------------------------------------------------------5-3-0----|
 
     // ---- Instrument table ----
     var PLUCK = {
-      bass_guitar: { t60: 1.4, bright: 0.18, pick: 0.12, post: 0.22, rel: 0.12 },
       contrabass: { t60: 1.0, bright: 0.22, pick: 0.1, post: 0.2, rel: 0.1 },
-      rhythm_guitar: { t60: 2.0, bright: 0.45, pick: 0.18, rel: 0.09 },
       ukulele: { t60: 0.8, bright: 0.55, pick: 0.25, rel: 0.06 }
     };
     var TRIM = { // per-instrument level, balanced from measured loop RMS so no part drowns the others
-      bass_guitar: 1.6, contrabass: 2.0, rhythm_guitar: 1.1, ukulele: 1.6, acoustic_piano: 0.3,
+      bass_guitar: 1.25, contrabass: 2.0, rhythm_guitar: 1.15, ukulele: 1.6, acoustic_piano: 0.3,
       tenor_sax: 0.33, piccolo: 0.24, bass_drums: 0.9, drum_kit: 1.1, floor_tom: 0.8, bongos: 0.7, cymbals: 1.8, triangle: 0.26
     };
     var PAN = { low: 0, mid: -0.25, high: 0.25 };
 
     function voice(inst, midi, durSec, vel, sr, seed) {
       var rng = makeRng(seed), nOff = Math.max(1, Math.round(durSec * sr)), f = mtof(midi), p;
+      if (inst === 'bass_guitar') return reggaeBassVoice(f, nOff, Math.floor(0.14 * sr), sr, vel, rng);
+      if (inst === 'rhythm_guitar') return resonatorGuitarVoice(f, nOff, Math.floor(0.09 * sr), sr, vel, rng);
       if (PLUCK[inst]) {
         p = PLUCK[inst];
         var q = { t60: p.t60, bright: Math.min(0.9, p.bright * (0.6 + 0.8 * vel / 127)), pick: p.pick, post: p.post };
