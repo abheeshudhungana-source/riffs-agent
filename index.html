@@ -127,8 +127,6 @@
               <select id="select-inst-low" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:border-amber-400 transition cursor-pointer">
                 <option value="bass_guitar" selected>Bass Guitar</option>
                 <option value="contrabass">Contrabass</option>
-                <option value="bass_drums">Bass Drums</option>
-                <option value="floor_tom">Floor Tom</option>
                 <option value="none">None (Off)</option>
               </select>
             </div>
@@ -140,7 +138,6 @@
                 <option value="rhythm_guitar" selected>Rhythm Guitar</option>
                 <option value="acoustic_piano">Acoustic Piano</option>
                 <option value="tenor_sax">Tenor Sax</option>
-                <option value="bongos">Bongos</option>
                 <option value="none">None (Off)</option>
               </select>
             </div>
@@ -149,10 +146,9 @@
             <div class="border border-slate-800 bg-slate-950/70 p-2 rounded-xl flex flex-col gap-1">
               <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">High End</span>
               <select id="select-inst-high" class="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:border-emerald-400 transition cursor-pointer">
-                <option value="cymbals" selected>Cymbals</option>
+                <option value="drum_kit" selected>Drum Kit</option>
                 <option value="ukulele">Ukulele</option>
                 <option value="piccolo">Piccolo</option>
-                <option value="triangle">Triangle</option>
                 <option value="none">None (Off)</option>
               </select>
             </div>
@@ -595,6 +591,18 @@ E|---------------------------------------------------------5-3-0----|
       }
       return out;
     }
+    function snareVoice(sr, rng) {
+      var len = Math.floor(0.25 * sr), out = new Float32Array(len), ph = 0, rate = decayRate(0.18, sr), env = 1, hp = 0, prev = 0;
+      for (var n = 0; n < len; n++) {
+        var t = n / sr;
+        ph += TWO_PI * (180 + 80 * Math.exp(-t * 35)) / sr;
+        var w = rng() * 2 - 1;
+        hp = 0.7 * (hp + w - prev); prev = w;
+        out[n] = (Math.sin(ph) * 0.45 + hp * 0.65) * env;
+        env *= rate;
+      }
+      return out;
+    }
     function tomVoice(sr, rng) {
       var len = Math.floor(0.9 * sr), out = new Float32Array(len), ph = 0, ph2 = 0, rate = decayRate(0.65, sr), env = 1, lp = 0;
       for (var n = 0; n < len; n++) {
@@ -659,7 +667,8 @@ E|---------------------------------------------------------5-3-0----|
     };
     var TRIM = { // per-instrument level, balanced from measured loop RMS so no part drowns the others
       bass_guitar: 1.6, contrabass: 2.0, rhythm_guitar: 1.1, ukulele: 1.6, acoustic_piano: 0.3,
-      tenor_sax: 0.33, piccolo: 0.24, bass_drums: 0.9, floor_tom: 0.8, bongos: 0.7, cymbals: 1.8, triangle: 0.26
+      tenor_sax: 0.33, piccolo: 0.24, bass_drums: 0.9, floor_tom: 0.8, bongos: 0.7, cymbals: 1.8, triangle: 0.26,
+      drum_kit: 1.1
     };
     var PAN = { low: 0, mid: -0.25, high: 0.25 };
 
@@ -678,6 +687,13 @@ E|---------------------------------------------------------5-3-0----|
         case 'piccolo':
           return windVoice(PICCOLO_TABLE, f, nOff, Math.floor(0.08 * sr), sr,
             { attack: 0.02, vibDelay: 0.15, vibDepth: 0.003, vibRate: 5.8, lpStart: 0.4, lpEnd: 0.8, breath: 0.04 }, rng);
+        case 'drum_kit':
+          if (midi === 36) return kickVoice(sr, rng);
+          if (midi === 38) return snareVoice(sr, rng);
+          if (midi === 46) return metalVoice(Math.floor(0.6 * sr), sr, { scale: 3.5, hp: 6500, t60: 0.3, tone: 0.55, noise: 0.5 }, rng);
+          if (midi === 49) return metalVoice(Math.floor(2.6 * sr), sr, { scale: 2.2, hp: 3000, t60: 2.2, tone: 0.4, noise: 0.8, pm: 0.3, ping: 0.12 }, rng);
+          if (midi === 51) return metalVoice(Math.floor(1.6 * sr), sr, { scale: 3.0, hp: 3500, t60: 1.3, tone: 0.55, noise: 0.25, pm: 0.35, ping: 0.1 }, rng);
+          return metalVoice(Math.floor(0.14 * sr), sr, { scale: 3.5, hp: 7000, t60: 0.06, tone: 0.6, noise: 0.5 }, rng);
         case 'bass_drums': return kickVoice(sr, rng);
         case 'floor_tom': return tomVoice(sr, rng);
         case 'bongos': return bongoVoice(midi === 60 ? 430 : 310, sr, rng);
@@ -787,7 +803,7 @@ E|---------------------------------------------------------5-3-0----|
       lockedTracks: ['bass'], bpm: 110, baseBpm: 110, groove: 'straight',
       speedTrainerActive: false, loopCount: 0, metronomeActive: true,
       muteTiers: { low: false, mid: false, high: false },
-      ensemble: { low: 'bass_guitar', mid: 'rhythm_guitar', high: 'cymbals' },
+      ensemble: { low: 'bass_guitar', mid: 'rhythm_guitar', high: 'drum_kit' },
       error: null,
     };
 

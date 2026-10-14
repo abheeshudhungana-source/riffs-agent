@@ -32,7 +32,7 @@ MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10]
 INSTRUMENT_TIER = {
     "bass_guitar": "low", "contrabass": "low", "bass_drums": "low", "floor_tom": "low",
     "rhythm_guitar": "mid", "acoustic_piano": "mid", "tenor_sax": "mid", "bongos": "mid",
-    "cymbals": "high", "ukulele": "high", "piccolo": "high", "triangle": "high",
+    "cymbals": "high", "ukulele": "high", "piccolo": "high", "triangle": "high", "drum_kit": "high",
 }
 # The UI lock buttons talk about lanes (bass / lead / drums); map them to tiers.
 LANE_ALIAS = {"bass": "low", "lead": "mid", "drums": "high"}
@@ -503,6 +503,39 @@ def _gen_triangle(bars: List[Dict[str, Any]], feel: Dict[str, Any], rng: random.
     return events
 
 
+def _gen_drum_kit(bars: List[Dict[str, Any]], feel: Dict[str, Any], rng: random.Random) -> List[Dict[str, Any]]:
+    events: List[Dict[str, Any]] = []
+    swing = feel.get("swing", 0.0)
+    vel_scale = feel.get("vel_scale", 1.0)
+    tags = feel.get("tags", [])
+    is_halftime = "halftime-shuffle" in tags or "half-time" in tags or feel.get("groove") == "half_time"
+
+    for bar in range(len(bars)):
+        if is_halftime:
+            # Kick on 0, Snare on 2 (beat 3 of bar)
+            events.append(_event(bar, 0.0, 0.5, 36, 108, vel_scale, rng, 2))
+            events.append(_event(bar, 2.0, 0.5, 38, 104, vel_scale, rng, 2))
+        else:
+            # Kick on 0, 2; Snare on 1, 3
+            events.append(_event(bar, 0.0, 0.5, 36, 108, vel_scale, rng, 2))
+            events.append(_event(bar, 1.0, 0.5, 38, 102, vel_scale, rng, 2))
+            events.append(_event(bar, 2.0, 0.5, 36, 96, vel_scale, rng, 2))
+            events.append(_event(bar, 3.0, 0.5, 38, 102, vel_scale, rng, 2))
+
+        # Hi-Hats: 8ths across bar (swung if swing > 0)
+        for b in range(4):
+            events.append(_event(bar, float(b), 0.3, 42, 84, vel_scale, rng, 2))
+            swung_upbeat = _swing_pos(b + 0.5, swing) if swing > 0 else (b + 0.5)
+            events.append(_event(bar, swung_upbeat, 0.3, 42, 68, vel_scale, rng, 2))
+
+        # Accent crash on bar 0 downbeat
+        if bar == 0:
+            events.append(_event(bar, 0.0, 2.0, 49, 96, vel_scale, rng, 1))
+
+    events.sort(key=lambda e: (e["beat"], e["midi"]))
+    return events
+
+
 def _generate_lane(inst: str, bars: List[Dict[str, Any]], key_pc: int, minor: bool, feel: Dict[str, Any], rng: random.Random) -> List[Dict[str, Any]]:
     if inst in ("bass_guitar", "contrabass"):
         return _gen_bass(inst, bars, feel, rng)
@@ -512,6 +545,8 @@ def _generate_lane(inst: str, bars: List[Dict[str, Any]], key_pc: int, minor: bo
         return _gen_sax(bars, key_pc, minor, feel, rng)
     if inst == "piccolo":
         return _gen_piccolo(bars, feel, rng)
+    if inst == "drum_kit":
+        return _gen_drum_kit(bars, feel, rng)
     if inst == "cymbals":
         return _gen_cymbals(bars, feel, rng)
     if inst == "bass_drums":

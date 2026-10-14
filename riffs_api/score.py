@@ -54,7 +54,7 @@ class ScoreDraft:
 
 
 _PERCUSSION_INSTRUMENTS = {
-    "bass_drums", "floor_tom", "bongos", "cymbals", "triangle",
+    "bass_drums", "floor_tom", "bongos", "cymbals", "triangle", "drum_kit",
 }
 _BASS_INSTRUMENTS = {"bass_guitar", "contrabass"}
 _CHORD_INSTRUMENTS = {"rhythm_guitar", "acoustic_piano", "ukulele"}
@@ -141,22 +141,54 @@ def draft_instrument_score(
                 for pitch in voicing
             )
         elif role == "percussion":
-            first, second = _PERCUSSION_PITCHES[instrument.strip().lower()]
-            if groove == "half_time":
-                events = ((0, first, 104), (3, second, 76))
-            elif instrument.strip().lower() == "bass_drums":
-                events = ((0, first, 108), (2, first, 92))
-            elif instrument.strip().lower() == "floor_tom":
-                events = ((0, first, 90), (2, second, 78))
-            elif instrument.strip().lower() == "bongos":
-                events = ((0, first, 82), (1, second, 64), (2, first, 76), (3, second, 64))
-            elif instrument.strip().lower() == "cymbals":
-                events = ((0, first, 70), (1, first, 54), (2, first, 64), (3, second, 74))
-            else:  # triangle
-                events = ((0, first, 55), (1, first, 42), (2, first, 50), (3, second, 62))
-            if groove == "swing":
-                events = tuple((2 / 3 if onset == 1 else 8 / 3 if onset == 3 else onset, pitch, velocity) for onset, pitch, velocity in events)
-            notes = tuple(ScoreNote(pitch, onset, 1 / 3 if groove == "swing" else 1, velocity) for onset, pitch, velocity in events)
+            inst_name = instrument.strip().lower()
+            if inst_name == "drum_kit":
+                if groove == "half_time":
+                    kit_notes = [
+                        ScoreNote(36, 0.0, 1.0, 110),
+                        ScoreNote(38, 2.0, 1.0, 106),
+                    ]
+                    for sub in range(8):
+                        kit_notes.append(ScoreNote(42, sub * 0.5, 0.5, 84 if sub % 2 == 0 else 68))
+                    notes = tuple(sorted(kit_notes, key=lambda n: (n.onset_beats, n.pitch_midi)))
+                elif groove == "swing":
+                    kit_notes = [
+                        ScoreNote(36, 0.0, 1.0, 108),
+                        ScoreNote(38, 1.0, 1.0, 102),
+                        ScoreNote(36, 2.0, 1.0, 96),
+                        ScoreNote(38, 3.0, 1.0, 102),
+                    ]
+                    for b in range(4):
+                        kit_notes.append(ScoreNote(42, float(b), 1 / 3, 84))
+                        kit_notes.append(ScoreNote(42, b + 2 / 3, 1 / 3, 68))
+                    notes = tuple(sorted(kit_notes, key=lambda n: (n.onset_beats, n.pitch_midi)))
+                else:  # straight
+                    kit_notes = [
+                        ScoreNote(36, 0.0, 1.0, 108),
+                        ScoreNote(38, 1.0, 1.0, 102),
+                        ScoreNote(36, 2.0, 1.0, 96),
+                        ScoreNote(38, 3.0, 1.0, 102),
+                    ]
+                    for sub in range(8):
+                        kit_notes.append(ScoreNote(42, sub * 0.5, 0.5, 84 if sub % 2 == 0 else 68))
+                    notes = tuple(sorted(kit_notes, key=lambda n: (n.onset_beats, n.pitch_midi)))
+            else:
+                first, second = _PERCUSSION_PITCHES[inst_name]
+                if groove == "half_time":
+                    events = ((0, first, 104), (3, second, 76))
+                elif inst_name == "bass_drums":
+                    events = ((0, first, 108), (2, first, 92))
+                elif inst_name == "floor_tom":
+                    events = ((0, first, 90), (2, second, 78))
+                elif inst_name == "bongos":
+                    events = ((0, first, 82), (1, second, 64), (2, first, 76), (3, second, 64))
+                elif inst_name == "cymbals":
+                    events = ((0, first, 70), (1, first, 54), (2, first, 64), (3, second, 74))
+                else:  # triangle
+                    events = ((0, first, 55), (1, first, 42), (2, first, 50), (3, second, 62))
+                if groove == "swing":
+                    events = tuple((2 / 3 if onset == 1 else 8 / 3 if onset == 3 else onset, pitch, velocity) for onset, pitch, velocity in events)
+                notes = tuple(ScoreNote(pitch, onset, 1 / 3 if groove == "swing" else 1, velocity) for onset, pitch, velocity in events)
         else:
             melody_tones = chord_tones[:3] or [root]
             pattern = (0, 1, 2, 1)

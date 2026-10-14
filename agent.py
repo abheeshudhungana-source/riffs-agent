@@ -99,7 +99,7 @@ _LOCK_ALIASES = {
     "bass": {"bass_guitar", "contrabass", "bass_drums"},
     "rhythm": {"rhythm_guitar", "acoustic_piano", "ukulele"},
     "lead": {"tenor_sax", "piccolo"},
-    "drums": {"bass_drums", "floor_tom", "bongos", "cymbals", "triangle"},
+    "drums": {"bass_drums", "floor_tom", "bongos", "cymbals", "triangle", "drum_kit"},
 }
 
 FEEL_TO_GROOVE = {
