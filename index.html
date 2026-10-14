@@ -526,6 +526,14 @@ E|---------------------------------------------------------5-3-0----|
         <label for="checkpoint-lyrics-edit" class="block text-[11px] font-semibold text-slate-400 mt-2.5">Edit 4-Line Verse (exactly 4 lines, one line per bar)</label>
         <textarea id="checkpoint-lyrics-edit" rows="4" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400"></textarea>
 
+        <div id="checkpoint-rights" class="mt-3 rounded-lg border border-slate-700 bg-slate-950/60 p-2.5 text-[11px] text-slate-300">
+          <p id="checkpoint-rights-msg"></p>
+          <label id="checkpoint-ack-row" class="hidden mt-2 flex items-start gap-2 cursor-pointer">
+            <input id="checkpoint-ack" type="checkbox" class="mt-0.5" />
+            <span>I understand rights are unassessed: no copyright clearance has been checked or granted for this audio.</span>
+          </label>
+        </div>
+
         <div class="mt-3 flex items-center justify-end gap-2">
           <button id="btn-cancel-vocals" type="button" class="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200">Keep Instrumental</button>
           <button id="btn-approve-vocals" type="button" class="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-lg shadow-md transition cursor-pointer">✨ Approve &amp; Synthesize Voice</button>
@@ -1635,9 +1643,29 @@ E|---------------------------------------------------------5-3-0----|
     let lastFocus = null;
     let pendingVocalData = null;
 
+    function renderCheckpointRights(d) {
+      const msg = $('checkpoint-rights-msg');
+      const ackRow = $('checkpoint-ack-row');
+      const ack = $('checkpoint-ack');
+      const btnApprove = $('btn-approve-vocals');
+      const status = (d && d.rights_status) || 'unassessed';
+      if (ack) ack.checked = false;
+      if (ackRow) ackRow.classList.toggle('hidden', status !== 'unassessed');
+      if (btnApprove) btnApprove.disabled = status === 'possible_match';
+      if (!msg) return;
+      if (status === 'possible_match') {
+        msg.textContent = 'Rights check: a possible melodic match was found. Voice synthesis is blocked for this take. Change the groove or instruments and generate again.';
+      } else if (status === 'clean') {
+        msg.textContent = 'Rights check: no melodic match found in the configured reference corpus. This is not a copyright clearance.';
+      } else {
+        msg.textContent = 'Rights check: not assessed. No reference corpus is configured, so no clearance exists for this audio.';
+      }
+    }
+
     function resetVocalCheckpoint() {
       if ($('vocal-checkpoint-card')) $('vocal-checkpoint-card').classList.add('hidden');
       if ($('modal-default-footer')) $('modal-default-footer').classList.remove('hidden');
+      if ($('checkpoint-ack')) $('checkpoint-ack').checked = false;
       const btnApprove = $('btn-approve-vocals');
       if (btnApprove) {
         btnApprove.disabled = false;
@@ -1847,6 +1875,7 @@ E|---------------------------------------------------------5-3-0----|
           });
           if ($('checkpoint-lyrics-preview')) $('checkpoint-lyrics-preview').innerHTML = previewHtml;
           if ($('checkpoint-lyrics-edit')) $('checkpoint-lyrics-edit').value = bars.map(b => b.text || b.lyric || '').join('\n');
+          renderCheckpointRights(d);
           return;
         }
 
@@ -1927,10 +1956,56 @@ E|---------------------------------------------------------5-3-0----|
         btnApprove.innerHTML = '✨ Synthesizing Vocal Voice…';
 
         const rawEdited = ($('checkpoint-lyrics-edit') ? $('checkpoint-lyrics-edit').value : '').trim();
-        const editedLines = rawEdited ? rawEdited.split('\n').map(l => l.trim()).filter(Boolean) : null;
-        const { token, takeData, payload } = pendingVocalData;
+        const editedLines = rawEdited ? rawEdited.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 4) : [];
+        let { token, takeData, payload } = pendingVocalData;
+
+        const failApprove = (msg) => {
+          modalError.textContent = msg;
+          modalError.classList.remove('hidden');
+          btnApprove.disabled = false;
+          btnApprove.innerHTML = '✨ Approve &amp; Synthesize Voice';
+        };
+
+        if (!editedLines.length) { failApprove('Enter the final verse (one line per bar) before approving.'); return; }
+        const ackBox = $('checkpoint-ack');
+        const needsAck = (takeData.rights_status || 'unassessed') === 'unassessed';
+        if (needsAck && !(ackBox && ackBox.checked)) {
+          failApprove('Please acknowledge that rights are unassessed before approving.');
+          return;
+        }
 
         try {
+          // The token is bound to the exact lyrics shown at the checkpoint. If the human edited
+          // them, re-run the checkpoint so the server issues a token for the edited text.
+          const draftLines = ((takeData.lyrics_draft && takeData.lyrics_draft.bars) || []).map(b => (b.text || b.lyric || '').trim());
+          if (JSON.stringify(draftLines) !== JSON.stringify(editedLines)) {
+            const recheck = await fetch('/api/generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...payload, edited_lyrics: editedLines, vocal_approved: false }),
+            });
+            if (!recheck.ok) {
+              let msg = 'Could not validate the edited lyrics. Please try again.';
+              try { const j = await recheck.json(); if (j && j.detail) msg = j.detail; } catch (_) {}
+              failApprove(msg);
+              return;
+            }
+            const rj = await recheck.json();
+            const nd = (rj && rj.data) || {};
+            if (nd.status !== 'awaiting_vocal_confirmation' || !nd.vocal_confirmation_token) {
+              failApprove('Could not validate the edited lyrics. Please try again.');
+              return;
+            }
+            token = nd.vocal_confirmation_token;
+            takeData = nd;
+            pendingVocalData = { token, takeData: nd, payload };
+            if (nd.rights_status === 'possible_match') {
+              renderCheckpointRights(nd);
+              failApprove('A possible melodic match was found. Voice synthesis is blocked for this take.');
+              return;
+            }
+          }
+
           const approvePayload = {
             token: token,
             prompt: payload.prompt || (takeData && takeData.prompt) || 'Accompaniment with lead vocal track',
@@ -1944,6 +2019,7 @@ E|---------------------------------------------------------5-3-0----|
             vocal_style: takeData.vocal_style || payload.vocal_style || 'soulful_lead',
             lyrics_language: takeData.lyrics_language || payload.lyrics_language || 'en',
             edited_lyrics: editedLines,
+            acknowledge_unassessed_rights: !!(ackBox && ackBox.checked),
           };
 
           const res = await fetch('/api/vocals/approve', {

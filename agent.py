@@ -6,10 +6,13 @@ import base64
 import hmac
 import random
 import logging
+import time
+import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Union
 from composer import INSTRUMENT_TIER, compose, parse_key, MAJOR_SCALE, MINOR_SCALE
 from riffs_api.prompt_guardrails import validate_prompt
+from riffs_api.token_store import get_token_store
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -294,19 +297,141 @@ def get_vocal_hmac_secret() -> str:
     return secret
 
 
-def generate_vocal_token(key: str, bpm: int, chords: List[str], lyrics_prompt: str) -> str:
-    """Generate cryptographic HMAC token for the HITL vocal approval gate."""
+class VocalApprovalError(ValueError):
+    """Approval refused. `code` is stable for API clients; subclass of ValueError for compatibility."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+VOCAL_TOKEN_DEFAULT_TTL = 900  # seconds
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _b64url_decode(text: str) -> bytes:
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def _normalize_lyric_lines(lyrics: Any) -> List[str]:
+    """Reduce draft bars / edited lines to the exact ordered list of lyric strings."""
+    lines: List[str] = []
+    for item in (lyrics or [])[:4]:
+        if isinstance(item, str):
+            lines.append(item.strip())
+        elif isinstance(item, dict):
+            lines.append(str(item.get("text") or item.get("lyric") or "").strip())
+    return lines
+
+
+def hash_lyrics(lyrics: Any) -> str:
+    payload = json.dumps(_normalize_lyric_lines(lyrics), ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def build_vocal_context(
+    key: str, bpm: int, chords: List[str], groove: str, instruments: List[str],
+    lyrics_prompt: str, lyrics_language: str, vocal_style: str, prompt: str = "",
+) -> Dict[str, Any]:
+    """Everything besides the lyrics the human approved: changing any of it voids the token."""
+    return {
+        "key": key,
+        "bpm": int(bpm),
+        "chords": list(chords),
+        "groove": groove,
+        "instruments": sorted(instruments),
+        "lyrics_prompt": lyrics_prompt,
+        "lyrics_language": lyrics_language,
+        "vocal_style": vocal_style,
+        "prompt": prompt or "",
+    }
+
+
+def derive_rights_status(melody_checks: Dict[str, Dict[str, Any]]) -> str:
+    """possible_match | clean | unassessed, from melodic-similarity results."""
+    statuses = [check.get("status") for check in (melody_checks or {}).values()]
+    if "potential_match" in statuses:
+        return "possible_match"
+    if statuses and all(status == "checked" for status in statuses):
+        return "clean"
+    return "unassessed"
+
+
+def generate_vocal_token(
+    lyrics: Any,
+    context: Dict[str, Any],
+    rights_status: str,
+    ttl_seconds: Optional[int] = None,
+    now: Optional[float] = None,
+) -> str:
+    """Issue `<claims>.<hmac>`: binds token id, expiry, exact lyrics hash, context, and rights status."""
     secret = get_vocal_hmac_secret()
-    raw = f"{key}:{bpm}:{':'.join(chords)}:{lyrics_prompt}"
-    return hmac.new(secret.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+    issued = int(now if now is not None else time.time())
+    ttl = ttl_seconds if ttl_seconds is not None else int(os.getenv("RIFFS_VOCAL_TOKEN_TTL", VOCAL_TOKEN_DEFAULT_TTL))
+    claims = {
+        "v": 1,
+        "jti": uuid.uuid4().hex,
+        "iat": issued,
+        "exp": issued + ttl,
+        "lyrics_sha256": hash_lyrics(lyrics),
+        "context": context,
+        "rights_status": rights_status,
+    }
+    body = _b64url(json.dumps(claims, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    signature = hmac.new(secret.encode("utf-8"), body.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{body}.{signature}"
 
 
-def verify_vocal_token(token: Optional[str], key: str, bpm: int, chords: List[str], lyrics_prompt: str) -> bool:
-    """Verify cryptographic HMAC token to prevent unauthorized execution."""
-    if not token:
-        return False
-    expected = generate_vocal_token(key, bpm, chords, lyrics_prompt)
-    return hmac.compare_digest(token, expected)
+def verify_and_consume_vocal_token(
+    token: Optional[str],
+    lyrics: Any,
+    context: Dict[str, Any],
+    current_rights_status: str,
+    acknowledge_unassessed_rights: bool = False,
+    token_store: Any = None,
+    now: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Validate everything, then consume the token last so a refused attempt does not burn it."""
+    secret = get_vocal_hmac_secret()
+    if not token or token.count(".") != 1:
+        raise VocalApprovalError("TOKEN_INVALID", "Invalid or forged vocal approval token. Confirmation rejected.")
+    body, signature = token.split(".")
+    expected = hmac.new(secret.encode("utf-8"), body.encode("ascii", "ignore"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        raise VocalApprovalError("TOKEN_INVALID", "Invalid or forged vocal approval token. Confirmation rejected.")
+    try:
+        claims = json.loads(_b64url_decode(body))
+    except (ValueError, UnicodeDecodeError):
+        raise VocalApprovalError("TOKEN_INVALID", "Malformed vocal approval token.")
+
+    current = now if now is not None else time.time()
+    if current > claims["exp"]:
+        raise VocalApprovalError("TOKEN_EXPIRED", "Vocal approval token expired. Request a fresh checkpoint.")
+    if claims["context"] != context:
+        raise VocalApprovalError("CONTEXT_MISMATCH", "Context mismatch: token was issued for different accompaniment settings.")
+    if claims["lyrics_sha256"] != hash_lyrics(lyrics):
+        raise VocalApprovalError(
+            "LYRICS_MISMATCH",
+            "Lyrics mismatch: token does not authorize these lyrics. Re-run the checkpoint with the edited lyrics to get a new token.",
+        )
+
+    # Rights gate: the stricter of the issued and the freshly recomputed status applies.
+    statuses = {claims["rights_status"], current_rights_status}
+    if "possible_match" in statuses:
+        raise VocalApprovalError("POTENTIAL_MATCH", "Vocal approval rejected: a possible melodic match was detected.")
+    if "unassessed" in statuses and not acknowledge_unassessed_rights:
+        raise VocalApprovalError(
+            "RIGHTS_ACK_REQUIRED",
+            "Explicit acknowledgment required: rights are unassessed and no copyright clearance is granted.",
+        )
+
+    store = token_store or get_token_store()
+    if not store.consume_token(claims["jti"], claims["exp"]):
+        raise VocalApprovalError("TOKEN_REPLAYED", "Vocal approval token has already been used.")
+    return claims
 
 
 def parse_root_pitch_class(chord: str) -> int:
@@ -686,6 +811,7 @@ class RiffsAgent:
         vocal_approved: bool = False,
         vocal_approval_token: Optional[str] = None,
         edited_lyrics: Optional[Union[List[str], List[Dict[str, Any]]]] = None,
+        acknowledge_unassessed_rights: bool = False,
     ) -> Dict[str, Any]:
         """
         Executes symbolic blueprint generation with part-locking and optional lyrics.
@@ -875,23 +1001,54 @@ class RiffsAgent:
         # Check if lyrics/vocals were requested (Suno-style double prompting)
         final_lyrics = None
         if lyrics_prompt:
-            token = generate_vocal_token(key, bpm, parsed_chords, lyrics_prompt)
+            get_vocal_hmac_secret()  # fail fast, before any token is issued or checked
+            rights_status = derive_rights_status(melody_checks)
+            vocal_context = build_vocal_context(
+                key, bpm, parsed_chords, groove, instruments,
+                lyrics_prompt, lyrics_language, vocal_style, prompt,
+            )
+
+            def _bars_from(lines: Any) -> List[Dict[str, Any]]:
+                bars = []
+                for idx, item in enumerate((lines or [])[:4]):
+                    c = parsed_chords[idx % len(parsed_chords)]
+                    if isinstance(item, str):
+                        bars.append({"bar": idx + 1, "chord": c, "text": item.strip()})
+                    elif isinstance(item, dict):
+                        bars.append({
+                            "bar": idx + 1,
+                            "chord": item.get("chord") or c,
+                            "text": str(item.get("text") or item.get("lyric") or "").strip(),
+                        })
+                return bars
 
             if not vocal_approved:
-                # Human-In-The-Loop Checkpoint: Halt before vocal audio synthesis
-                lyrics_draft = draft_bar_aligned_lyrics(
-                    chords=parsed_chords,
-                    key=key,
-                    bpm=bpm,
-                    prompt=lyrics_prompt,
-                    instrumental_style=prompt,
-                    groove=groove,
-                    instruments=instruments,
-                    language=lyrics_language,
-                    vocal_style=vocal_style,
-                    api_key=self.api_key,
-                    model_id=self.model_id,
-                )
+                # Human-In-The-Loop Checkpoint: Halt before vocal audio synthesis.
+                # Edited lyrics re-enter here so the new token binds to the edited text.
+                if edited_lyrics:
+                    lyrics_draft = {
+                        "bars": _bars_from(edited_lyrics),
+                        "language": lyrics_language,
+                        "vocal_style": vocal_style,
+                        "instrumental_vibe": detect_instrumental_vibe(prompt, groove, instruments),
+                        "edited": True,
+                    }
+                else:
+                    lyrics_draft = draft_bar_aligned_lyrics(
+                        chords=parsed_chords,
+                        key=key,
+                        bpm=bpm,
+                        prompt=lyrics_prompt,
+                        instrumental_style=prompt,
+                        groove=groove,
+                        instruments=instruments,
+                        language=lyrics_language,
+                        vocal_style=vocal_style,
+                        api_key=self.api_key,
+                        model_id=self.model_id,
+                    )
+                    lyrics_draft["bars"] = _bars_from(lyrics_draft.get("bars"))
+                token = generate_vocal_token(lyrics_draft["bars"], vocal_context, rights_status)
                 result_data = {
                     "status": "awaiting_vocal_confirmation",
                     "checkpoint": "HUMAN_IN_THE_LOOP_VOCAL_APPROVAL",
@@ -916,6 +1073,8 @@ class RiffsAgent:
                     },
                     "melodic_similarity": melody_checks,
                     "enrichment": enrichment_status,
+                    "rights_status": rights_status,
+                    "requires_rights_acknowledgment": rights_status == "unassessed",
                     "lyrics_draft": lyrics_draft,
                     "vocal_confirmation_token": token,
                 }
@@ -931,38 +1090,20 @@ class RiffsAgent:
                 del self.take_history[:-5]
                 return result_data
 
-            # Human has approved! Verify cryptographic confirmation token
-            if not verify_vocal_token(vocal_approval_token, key, bpm, parsed_chords, lyrics_prompt):
-                raise ValueError("Invalid or forged vocal approval token. Confirmation rejected.")
-
-            if edited_lyrics:
-                norm_lyrics = []
-                for idx, item in enumerate(edited_lyrics[:4]):
-                    c = parsed_chords[idx % len(parsed_chords)]
-                    if isinstance(item, str):
-                        norm_lyrics.append({"bar": idx + 1, "chord": c, "text": item})
-                    elif isinstance(item, dict):
-                        text = item.get("text") or item.get("lyric") or ""
-                        norm_lyrics.append({
-                            "bar": idx + 1,
-                            "chord": item.get("chord") or c,
-                            "text": text,
-                        })
-                final_lyrics = norm_lyrics[:4]
-            else:
-                final_lyrics = draft_bar_aligned_lyrics(
-                    chords=parsed_chords,
-                    key=key,
-                    bpm=bpm,
-                    prompt=lyrics_prompt,
-                    instrumental_style=prompt,
-                    groove=groove,
-                    instruments=instruments,
-                    language=lyrics_language,
-                    vocal_style=vocal_style,
-                    api_key=self.api_key,
-                    model_id=self.model_id,
-                ).get("bars", [])[:4]
+            # Human has approved. The final lyrics must be supplied explicitly: the token is
+            # bound to their exact text, so the server never regenerates them at approval time.
+            final_lyrics = _bars_from(edited_lyrics)
+            if not final_lyrics or not all(bar["text"] for bar in final_lyrics):
+                raise VocalApprovalError(
+                    "LYRICS_REQUIRED", "Approval must include the exact final lyrics shown at the checkpoint."
+                )
+            verify_and_consume_vocal_token(
+                vocal_approval_token,
+                final_lyrics,
+                vocal_context,
+                current_rights_status=rights_status,
+                acknowledge_unassessed_rights=acknowledge_unassessed_rights,
+            )
 
             vocal_events = _generate_vocal_melody_events(parsed_chords, key, final_lyrics, seed)
             vocal_lane = {

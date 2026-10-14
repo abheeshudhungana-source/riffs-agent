@@ -2,11 +2,12 @@
 
 import os
 import sys
+import json
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agent import RiffsAgent
+from agent import RiffsAgent, VocalApprovalError
 from riffs_api.prompt_guardrails import PromptRefusal, validate_prompt
 
 
@@ -93,45 +94,46 @@ class TestLyricsVocalHITL(unittest.TestCase):
         vocal_stems = [s for s in result.get("stems", []) if s.get("lane") == "vocal_lead"]
         self.assertEqual(len(vocal_stems), 0, "Vocal stem must not be published before approval")
 
+    # ---- helpers -------------------------------------------------------------------
+    def _checkpoint(self, prompt="Soul pocket", chords="Am - F - C - G",
+                    lyrics_prompt="Rain on the windowpane", **kwargs):
+        return self.agent.generate(
+            prompt=prompt, chords=chords, lyrics_prompt=lyrics_prompt,
+            vocal_approved=False, **kwargs,
+        )
+
+    def _approve(self, checkpoint, lines=None, prompt="Soul pocket", chords="Am - F - C - G",
+                 lyrics_prompt="Rain on the windowpane", token=None, **kwargs):
+        lines = lines if lines is not None else [b["text"] for b in checkpoint["lyrics_draft"]["bars"]]
+        kwargs.setdefault("acknowledge_unassessed_rights", True)
+        return RiffsAgent().generate(
+            prompt=prompt, chords=chords, lyrics_prompt=lyrics_prompt,
+            vocal_approved=True,
+            vocal_approval_token=token or checkpoint["vocal_confirmation_token"],
+            edited_lyrics=lines, **kwargs,
+        )
+
     def test_checkpoint_rejection_with_invalid_or_missing_token(self):
-        # Trying to set vocal_approved=True with a forged token must fail or stay unapproved
-        with self.assertRaises(ValueError):
+        # A forged token must be rejected even when exact lyrics are supplied
+        with self.assertRaises(VocalApprovalError) as ctx:
             self.agent.generate(
                 prompt="Neo-soul",
                 chords="Am - F - C - G",
                 lyrics_prompt="Driving at night",
                 vocal_approved=True,
                 vocal_approval_token="FORGED_INVALID_TOKEN",
+                edited_lyrics=["a", "b", "c", "d"],
+                acknowledge_unassessed_rights=True,
             )
+        self.assertEqual(ctx.exception.code, "TOKEN_INVALID")
 
     def test_checkpoint_approval_synthesizes_vocal_lead(self):
-        # First turn: draft lyrics
-        res1 = self.agent.generate(
-            prompt="Soul pocket",
-            chords="Am - F - C - G",
-            lyrics_prompt="Rain on the windowpane",
-            vocal_approved=False,
-        )
-        token = res1["vocal_confirmation_token"]
-        lyrics_draft = res1["lyrics_draft"]
-
-        # Human edits line 1:
-        edited_bars = list(lyrics_draft["bars"])
-        edited_bars[0]["text"] = "Watching rain drop on the glass tonight"
-
-        # Second turn: human confirms with token and edited lyrics
-        res2 = self.agent.generate(
-            prompt="Soul pocket",
-            chords="Am - F - C - G",
-            lyrics_prompt="Rain on the windowpane",
-            vocal_approved=True,
-            vocal_approval_token=token,
-            edited_lyrics=edited_bars,
-        )
+        res1 = self._checkpoint()
+        res2 = self._approve(res1)
 
         self.assertEqual(res2.get("status"), "success")
         self.assertIn("lyrics", res2)
-        self.assertEqual(res2["lyrics"][0]["text"], "Watching rain drop on the glass tonight")
+        self.assertEqual(res2["lyrics"][0]["text"], res1["lyrics_draft"]["bars"][0]["text"])
 
         # Vocal lead stem must now be available in stems and score
         vocal_stems = [s for s in res2.get("stems", []) if s.get("lane") == "vocal_lead"]
@@ -142,31 +144,19 @@ class TestLyricsVocalHITL(unittest.TestCase):
         self.assertEqual(len(vocal_lanes), 1)
         self.assertTrue(len(vocal_lanes[0]["events"]) > 0)
 
-    def test_checkpoint_approval_with_plain_string_lines(self):
-        res1 = self.agent.generate(
-            prompt="Funky groove",
-            chords="Dm - G - C - Am",
-            lyrics_prompt="City lights flickering",
-            vocal_approved=False,
-        )
-        token = res1["vocal_confirmation_token"]
-
-        # Human provides edited lyrics as list of plain strings
+    def test_checkpoint_approval_with_edited_plain_string_lines(self):
         custom_lines = [
             "Walking alone under neon signs",
             "Shadows dance along the street",
             "Waiting for a rhythm in the night",
             "Moving with the bass guitar beat"
         ]
+        common = dict(prompt="Funky groove", chords="Dm - G - C - Am", lyrics_prompt="City lights flickering")
+        # Edits go back through the checkpoint so the new token is bound to the edited text.
+        res1 = self._checkpoint(**common, edited_lyrics=custom_lines)
+        self.assertEqual([b["text"] for b in res1["lyrics_draft"]["bars"]], custom_lines)
 
-        res2 = self.agent.generate(
-            prompt="Funky groove",
-            chords="Dm - G - C - Am",
-            lyrics_prompt="City lights flickering",
-            vocal_approved=True,
-            vocal_approval_token=token,
-            edited_lyrics=custom_lines,
-        )
+        res2 = self._approve(res1, lines=custom_lines, **common)
 
         self.assertEqual(res2.get("status"), "success")
         self.assertEqual(len(res2["lyrics"]), 4)
@@ -220,22 +210,34 @@ class TestLyricsVocalHITL(unittest.TestCase):
         })
         self.assertEqual(bad_req.status_code, 403)
 
-        # 3. Legitimate approval succeeds and synthesizes vocal lead
-        ok_req = client.post("/api/vocals/approve", json={
+        # 3. Approval without the rights acknowledgment is refused (rights are unassessed here)
+        base = {
             "token": token,
+            "prompt": "Smooth soul groove",
             "lyrics_prompt": "Midnight train arriving at dawn",
             "key": "Am",
             "bpm": 110,
             "chords": "Am - F - C - G",
             "instruments": ["bass_guitar", "rhythm_guitar", "drum_kit"],
-            "edited_lyrics": ["Midnight train rolling down the track"],
-        })
+            "edited_lyrics": [b["text"] for b in d1["lyrics_draft"]["bars"]],
+        }
+        no_ack = client.post("/api/vocals/approve", json=base)
+        self.assertEqual(no_ack.status_code, 403)
+        self.assertEqual(no_ack.json()["code"], "RIGHTS_ACK_REQUIRED")
+
+        # 4. Legitimate approval (with acknowledgment) succeeds and synthesizes vocal lead
+        ok_req = client.post("/api/vocals/approve", json={**base, "acknowledge_unassessed_rights": True})
         self.assertEqual(ok_req.status_code, 200)
         d2 = ok_req.json()["data"]
         self.assertEqual(d2["status"], "success")
         self.assertIn("vocal_lead", [s["lane"] for s in d2["stems"]])
         vocal_lanes = [l for l in d2["score"]["lanes"] if l["instrument"] == "vocal_lead"]
         self.assertEqual(len(vocal_lanes), 1)
+
+        # 5. The same token cannot be replayed
+        replay = client.post("/api/vocals/approve", json={**base, "acknowledge_unassessed_rights": True})
+        self.assertEqual(replay.status_code, 403)
+        self.assertEqual(replay.json()["code"], "TOKEN_REPLAYED")
 
     def test_lyrics_strictly_limited_to_four_line_verse(self):
         # 4-chord progression
@@ -257,14 +259,7 @@ class TestLyricsVocalHITL(unittest.TestCase):
         self.assertEqual(len(res2["lyrics_draft"]["bars"]), 4, "8-chord progression must still limit verse to 4 lines")
 
         # After approval, result must also be strictly 4 lines
-        token = res1["vocal_confirmation_token"]
-        approved = self.agent.generate(
-            prompt="Neo-soul groove",
-            chords="Am - F - C - G",
-            lyrics_prompt="Reflections in the river",
-            vocal_approved=True,
-            vocal_approval_token=token,
-        )
+        approved = self._approve(res1, prompt="Neo-soul groove", lyrics_prompt="Reflections in the river")
         self.assertEqual(len(approved["lyrics"]), 4, "Approved lyrics must be strictly 4 lines")
 
     def test_lyrics_match_instrumental_vibe_reggae(self):
@@ -318,6 +313,225 @@ class TestLyricsVocalHITL(unittest.TestCase):
         self.assertEqual(len(draft["bars"]), 4)
         corpus = " ".join(b["text"].lower() for b in draft["bars"])
         self.assertTrue(any(w in corpus for w in ["slap", "funk", "disco", "tight", "pocket"]))
+
+    def test_token_rejects_edited_draft_with_original_token(self):
+        # A checkpoint is issued for draft A
+        res1 = self._checkpoint(prompt="Neo-soul groove", lyrics_prompt="Starlight shining")
+        original_token = res1["vocal_confirmation_token"]
+        original_lines = [b["text"] for b in res1["lyrics_draft"]["bars"]]
+
+        # Attempt to approve with edited lines without acquiring a fresh token
+        tampered_lines = list(original_lines)
+        tampered_lines[0] = "Tampered first line not in token"
+
+        with self.assertRaises(VocalApprovalError) as ctx:
+            self._approve(res1, lines=tampered_lines, prompt="Neo-soul groove",
+                          lyrics_prompt="Starlight shining", token=original_token)
+        self.assertEqual(ctx.exception.code, "LYRICS_MISMATCH")
+
+    def test_token_rejects_altered_context(self):
+        res1 = self._checkpoint(prompt="Neo-soul groove", chords="Am - F - C - G", key="Am")
+        token = res1["vocal_confirmation_token"]
+        lines = [b["text"] for b in res1["lyrics_draft"]["bars"]]
+
+        # Try approving with altered key
+        with self.assertRaises(VocalApprovalError) as ctx:
+            self.agent.generate(
+                prompt="Neo-soul groove",
+                chords="Am - F - C - G",
+                key="Dm",  # altered key
+                bpm=110,
+                lyrics_prompt="Rain on the windowpane",
+                vocal_approved=True,
+                vocal_approval_token=token,
+                edited_lyrics=lines,
+                acknowledge_unassessed_rights=True,
+            )
+        self.assertEqual(ctx.exception.code, "CONTEXT_MISMATCH")
+
+    def test_token_rejects_expired_token(self):
+        from agent import generate_vocal_token, build_vocal_context
+        import time
+
+        lyrics = ["Line 1", "Line 2", "Line 3", "Line 4"]
+        ctx = build_vocal_context("Am", 110, ["Am", "F", "C", "G"], "straight",
+                                  ["bass_guitar"], "Prompt", "en", "soulful_lead", "Soul groove")
+        # Generate token with negative TTL (already expired)
+        expired_token = generate_vocal_token(lyrics, ctx, "unassessed", ttl_seconds=-10)
+
+        with self.assertRaises(VocalApprovalError) as ctx_err:
+            self.agent.generate(
+                prompt="Soul groove",
+                chords="Am - F - C - G",
+                key="Am",
+                bpm=110,
+                instruments=["bass_guitar"],
+                lyrics_prompt="Prompt",
+                vocal_approved=True,
+                vocal_approval_token=expired_token,
+                edited_lyrics=lyrics,
+                acknowledge_unassessed_rights=True,
+            )
+        self.assertEqual(ctx_err.exception.code, "TOKEN_EXPIRED")
+
+    def test_token_rejects_replayed_token_agent_level(self):
+        res1 = self._checkpoint(prompt="Soul groove", chords="Am - F - C - G")
+        token = res1["vocal_confirmation_token"]
+        lines = [b["text"] for b in res1["lyrics_draft"]["bars"]]
+
+        # First consumption succeeds
+        res2 = self._approve(res1, lines=lines, prompt="Soul groove", chords="Am - F - C - G", token=token)
+        self.assertEqual(res2.get("status"), "success")
+
+        # Second consumption with the exact same token fails
+        with self.assertRaises(VocalApprovalError) as ctx:
+            self._approve(res1, lines=lines, prompt="Soul groove", chords="Am - F - C - G", token=token)
+        self.assertEqual(ctx.exception.code, "TOKEN_REPLAYED")
+
+    def test_rights_outcome_potential_match_rejected(self):
+        from agent import generate_vocal_token, build_vocal_context
+
+        lyrics = ["Line 1", "Line 2", "Line 3", "Line 4"]
+        ctx = build_vocal_context("Am", 110, ["Am", "F", "C", "G"], "straight",
+                                  ["bass_guitar"], "Prompt", "en", "soulful_lead", "Soul groove")
+        # Token issued when a potential match was flagged
+        matched_token = generate_vocal_token(lyrics, ctx, "possible_match")
+
+        with self.assertRaises(VocalApprovalError) as ctx_err:
+            self.agent.generate(
+                prompt="Soul groove",
+                chords="Am - F - C - G",
+                key="Am",
+                bpm=110,
+                instruments=["bass_guitar"],
+                lyrics_prompt="Prompt",
+                vocal_approved=True,
+                vocal_approval_token=matched_token,
+                edited_lyrics=lyrics,
+                acknowledge_unassessed_rights=True,
+            )
+        self.assertEqual(ctx_err.exception.code, "POTENTIAL_MATCH")
+
+    def test_rights_outcome_unassessed_requires_acknowledgment(self):
+        res1 = self._checkpoint(prompt="Soul groove", chords="Am - F - C - G")
+        token = res1["vocal_confirmation_token"]
+        lines = [b["text"] for b in res1["lyrics_draft"]["bars"]]
+
+        # Approval without acknowledge_unassessed_rights raises RIGHTS_ACK_REQUIRED
+        with self.assertRaises(VocalApprovalError) as ctx:
+            self.agent.generate(
+                prompt="Soul groove",
+                chords="Am - F - C - G",
+                key="Am",
+                bpm=110,
+                lyrics_prompt="Rain on the windowpane",
+                vocal_approved=True,
+                vocal_approval_token=token,
+                edited_lyrics=lines,
+                acknowledge_unassessed_rights=False,
+            )
+        self.assertEqual(ctx.exception.code, "RIGHTS_ACK_REQUIRED")
+
+        # Approval with acknowledgment succeeds
+        res2 = self.agent.generate(
+            prompt="Soul groove",
+            chords="Am - F - C - G",
+            key="Am",
+            bpm=110,
+            lyrics_prompt="Rain on the windowpane",
+            vocal_approved=True,
+            vocal_approval_token=token,
+            edited_lyrics=lines,
+            acknowledge_unassessed_rights=True,
+        )
+        self.assertEqual(res2.get("status"), "success")
+
+    def test_rights_outcome_clean_corpus_succeeds_without_ack(self):
+        from agent import generate_vocal_token, build_vocal_context
+
+        lyrics = ["Line 1", "Line 2", "Line 3", "Line 4"]
+        ctx = build_vocal_context("Am", 110, ["Am", "F", "C", "G"], "straight",
+                                  ["bass_guitar"], "Clean test", "en", "soulful_lead", "Clean test")
+        # Token issued with clean rights status
+        clean_token = generate_vocal_token(lyrics, ctx, "clean")
+
+        from unittest.mock import patch
+        # Patch derive_rights_status to return clean during verification
+        with patch("agent.derive_rights_status", return_value="clean"):
+            res = self.agent.generate(
+                prompt="Clean test",
+                chords="Am - F - C - G",
+                key="Am",
+                bpm=110,
+                instruments=["bass_guitar"],
+                lyrics_prompt="Clean test",
+                vocal_approved=True,
+                vocal_approval_token=clean_token,
+                edited_lyrics=lyrics,
+                acknowledge_unassessed_rights=False,  # No ack required when clean!
+            )
+        self.assertEqual(res.get("status"), "success")
+
+    def test_token_store_fail_closed_on_vercel_without_kv(self):
+        from riffs_api.token_store import get_token_store, TokenStoreUnavailable, set_token_store
+        import riffs_api.token_store as ts
+
+        # Reset singleton
+        ts._GLOBAL_STORE = None
+
+        prev_vercel = os.environ.get("VERCEL")
+        prev_kv_url = os.environ.get("KV_REST_API_URL")
+        prev_upstash_url = os.environ.get("UPSTASH_REDIS_REST_URL")
+        try:
+            os.environ["VERCEL"] = "1"
+            os.environ.pop("KV_REST_API_URL", None)
+            os.environ.pop("UPSTASH_REDIS_REST_URL", None)
+
+            with self.assertRaises(TokenStoreUnavailable) as ctx:
+                get_token_store()
+            self.assertIn("KV_REST_API_URL", str(ctx.exception))
+        finally:
+            if prev_vercel is not None:
+                os.environ["VERCEL"] = prev_vercel
+            else:
+                os.environ.pop("VERCEL", None)
+            if prev_kv_url:
+                os.environ["KV_REST_API_URL"] = prev_kv_url
+            if prev_upstash_url:
+                os.environ["UPSTASH_REDIS_REST_URL"] = prev_upstash_url
+            ts._GLOBAL_STORE = None
+
+    def test_upstash_redis_token_store_atomic_nx(self):
+        from riffs_api.token_store import UpstashRedisTokenStore
+        from unittest.mock import patch, MagicMock
+        import io
+
+        store = UpstashRedisTokenStore(url="https://fake-kv.upstash.io", token="secret-token")
+
+        # Mock urllib.request.urlopen returning {"result": "OK"} for first call
+        mock_response_ok = MagicMock()
+        mock_response_ok.read.return_value = json.dumps({"result": "OK"}).encode("utf-8")
+        mock_response_ok.__enter__.return_value = mock_response_ok
+
+        # And returning {"result": None} (key already existed) for second call
+        mock_response_none = MagicMock()
+        mock_response_none.read.return_value = json.dumps({"result": None}).encode("utf-8")
+        mock_response_none.__enter__.return_value = mock_response_none
+
+        with patch("urllib.request.urlopen", side_effect=[mock_response_ok, mock_response_none]) as mock_urlopen:
+            first_use = store.consume_token("test-jti-123", 1700000000)
+            self.assertTrue(first_use)
+
+            # Check that request payload was ["SET", "riffs:vocal:token:test-jti-123", "consumed", "EXAT", 1700000060, "NX"]
+            req = mock_urlopen.call_args_list[0][0][0]
+            self.assertEqual(req.full_url, "https://fake-kv.upstash.io")
+            sent_payload = json.loads(req.data.decode("utf-8"))
+            self.assertEqual(sent_payload, ["SET", "riffs:vocal:token:test-jti-123", "consumed", "EXAT", 1700000060, "NX"])
+            self.assertEqual(req.headers["Authorization"], "Bearer secret-token")
+
+            # Second call returns False (replay detected)
+            second_use = store.consume_token("test-jti-123", 1700000000)
+            self.assertFalse(second_use)
 
 
 if __name__ == "__main__":

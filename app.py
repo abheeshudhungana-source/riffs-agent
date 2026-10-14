@@ -10,10 +10,14 @@ from riffs_api.prompt_guardrails import PromptRefusal
 
 # Import the RIFFs agent harness
 try:
-    from agent import RiffsAgent
+    from agent import RiffsAgent, VocalApprovalError
     agent = RiffsAgent()
 except Exception as e:
     agent = None
+
+    class VocalApprovalError(ValueError):  # placeholder so error mapping still imports
+        code = "TOKEN_INVALID"
+
     print(f"Warning: could not initialize RiffsAgent: {e}")
 
 app = FastAPI(
@@ -61,6 +65,7 @@ class GenerateRequest(BaseModel):
     vocal_approved: Optional[bool] = False
     vocal_approval_token: Optional[str] = None
     edited_lyrics: Optional[Union[List[str], List[Dict[str, Any]]]] = None
+    acknowledge_unassessed_rights: Optional[bool] = False
 
 
 ALLOWED_INSTRUMENTS = {
@@ -218,11 +223,14 @@ async def generate_riff(req: GenerateRequest):
             vocal_approved=bool(req.vocal_approved),
             vocal_approval_token=req.vocal_approval_token,
             edited_lyrics=req.edited_lyrics,
+            acknowledge_unassessed_rights=bool(req.acknowledge_unassessed_rights),
         )
         return {
             "status": "success",
             "data": data
         }
+    except VocalApprovalError as exc:
+        return _vocal_error_response(exc)
     except ProgressionError as exc:
         return JSONResponse(
             status_code=422,
@@ -252,6 +260,9 @@ async def generate_riff(req: GenerateRequest):
             },
         )
     except Exception as exc:
+        mapped = _vocal_error_response(exc)
+        if mapped is not None:
+            return mapped
         return JSONResponse(
             status_code=500,
             content={
@@ -275,6 +286,20 @@ class VocalApproveRequest(BaseModel):
     groove: Optional[Literal["straight", "half_time", "swing", "half_time_shuffle"]] = "straight"
     vocal_style: Optional[str] = "soulful_lead"
     lyrics_language: Optional[str] = "en"
+    acknowledge_unassessed_rights: Optional[bool] = False
+
+
+def _vocal_error_response(exc: Exception):
+    """Map approval failures to stable codes; None means 'not a vocal approval error'."""
+    from riffs_api.token_store import TokenStoreUnavailable
+    if isinstance(exc, VocalApprovalError):
+        status = 422 if exc.code == "POTENTIAL_MATCH" else 403
+        return JSONResponse(status_code=status, content={"status": "error", "code": exc.code, "detail": str(exc)})
+    if isinstance(exc, TokenStoreUnavailable):
+        return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_REPLAY_STORE_UNAVAILABLE", "detail": str(exc)})
+    if isinstance(exc, RuntimeError) and "RIFFS_VOCAL_SECRET" in str(exc):
+        return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_NOT_CONFIGURED", "detail": str(exc)})
+    return None
 
 
 @app.post("/api/vocals/approve")
@@ -294,11 +319,15 @@ async def approve_vocal_track(req: VocalApproveRequest):
             vocal_approved=True,
             vocal_approval_token=req.token,
             edited_lyrics=req.edited_lyrics,
+            acknowledge_unassessed_rights=bool(req.acknowledge_unassessed_rights),
         )
         return {"status": "success", "data": data}
-    except ValueError as exc:
-        return JSONResponse(status_code=403, content={"status": "error", "code": "VOCAL_AUTH_FAILED", "detail": str(exc)})
     except Exception as exc:
+        mapped = _vocal_error_response(exc)
+        if mapped is not None:
+            return mapped
+        if isinstance(exc, ValueError):
+            return JSONResponse(status_code=403, content={"status": "error", "code": "VOCAL_AUTH_FAILED", "detail": str(exc)})
         return JSONResponse(status_code=500, content={"status": "error", "code": "VOCAL_RENDER_FAILED", "detail": str(exc)})
 
 
