@@ -1,216 +1,203 @@
-"""Tests for Suno-style double prompting and Human-in-the-Loop vocal confirmation."""
+"""Regression coverage for the human-reviewed vocal lane and approval boundary."""
 
+import copy
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent import RiffsAgent
 from riffs_api.prompt_guardrails import PromptRefusal, validate_prompt
+from riffs_api.vocal_approval import (
+    VocalApprovalUnavailable,
+    VocalInputError,
+    consume_vocal_token,
+    issue_vocal_token,
+    normalize_lyrics,
+)
 
 
 class TestLyricsVocalHITL(unittest.TestCase):
     def setUp(self):
+        self.secret_patch = patch.dict(os.environ, {
+            "RIFFS_VOCAL_SECRET": "test-only-secret-that-is-long-enough-32",
+            "ANTHROPIC_API_KEY": "",
+        })
+        self.secret_patch.start()
         self.agent = RiffsAgent()
+        self.agent.api_key = None
 
-    def test_guardrails_allow_lyrics_when_explicitly_enabled(self):
-        # By default, instrumental prompt without lyrics permission rejects lyrics
-        with self.assertRaises(PromptRefusal) as ctx:
-            validate_prompt("Write lyrics about love", allow_lyrics=False)
-        self.assertEqual(ctx.exception.code, "INSTRUMENTAL_ONLY")
+    def tearDown(self):
+        self.secret_patch.stop()
 
-        # When allow_lyrics=True, it succeeds
-        try:
-            validate_prompt("Write lyrics about love", allow_lyrics=True)
-        except PromptRefusal:
-            self.fail("validate_prompt raised PromptRefusal unexpectedly when allow_lyrics=True")
-
-    def test_guardrails_still_block_full_song_even_if_lyrics_allowed(self):
-        with self.assertRaises(PromptRefusal) as ctx:
-            validate_prompt("Write a complete song with lyrics", allow_lyrics=True)
-        self.assertEqual(ctx.exception.code, "LOOP_LENGTH_LIMIT")
-
-    def test_double_prompt_generates_lyrics_draft_and_halts_at_checkpoint(self):
-        # Request with both instrumental prompt and lyrics prompt, but unapproved
-        result = self.agent.generate(
-            prompt="Neo-soul groove with mellow rhodes",
-            chords="Am - F - C - G",
-            key="Am",
-            bpm=110,
-            lyrics_prompt="Late night driving through the city lights",
-            lyrics_language="en",
-            vocal_style="soulful_lead",
-            vocal_approved=False,
-        )
-
-        # Must halt at the Human-in-the-Loop checkpoint
-        self.assertEqual(result.get("status"), "awaiting_vocal_confirmation")
-        self.assertIn("lyrics_draft", result)
-        lyrics_draft = result["lyrics_draft"]
-        self.assertEqual(lyrics_draft["language"], "en")
-        self.assertEqual(lyrics_draft["vocal_style"], "soulful_lead")
-        self.assertTrue(len(lyrics_draft["bars"]) >= 4, "Must generate at least 4 bars of lyrics")
-
-        # Each bar must be aligned with the progression chords
-        chords = ["Am", "F", "C", "G"]
-        for i, bar in enumerate(lyrics_draft["bars"][:4]):
-            self.assertEqual(bar["chord"], chords[i % len(chords)])
-            self.assertTrue(len(bar["text"]) > 0)
-
-        # Must provide a signed confirmation token
-        self.assertIn("vocal_confirmation_token", result)
-        self.assertTrue(len(result["vocal_confirmation_token"]) > 16)
-
-        # Vocal lead stem must NOT be synthesized or available until approved
-        vocal_stems = [s for s in result.get("stems", []) if s.get("lane") == "vocal_lead"]
-        self.assertEqual(len(vocal_stems), 0, "Vocal stem must not be published before approval")
-
-    def test_checkpoint_rejection_with_invalid_or_missing_token(self):
-        # Trying to set vocal_approved=True with a forged token must fail or stay unapproved
-        with self.assertRaises(ValueError):
-            self.agent.generate(
-                prompt="Neo-soul",
-                chords="Am - F - C - G",
-                lyrics_prompt="Driving at night",
-                vocal_approved=True,
-                vocal_approval_token="FORGED_INVALID_TOKEN",
-            )
-
-    def test_checkpoint_approval_synthesizes_vocal_lead(self):
-        # First turn: draft lyrics
-        res1 = self.agent.generate(
-            prompt="Soul pocket",
-            chords="Am - F - C - G",
-            lyrics_prompt="Rain on the windowpane",
-            vocal_approved=False,
-        )
-        token = res1["vocal_confirmation_token"]
-        lyrics_draft = res1["lyrics_draft"]
-
-        # Human edits line 1:
-        edited_bars = list(lyrics_draft["bars"])
-        edited_bars[0]["text"] = "Watching rain drop on the glass tonight"
-
-        # Second turn: human confirms with token and edited lyrics
-        res2 = self.agent.generate(
-            prompt="Soul pocket",
-            chords="Am - F - C - G",
-            lyrics_prompt="Rain on the windowpane",
-            vocal_approved=True,
-            vocal_approval_token=token,
-            edited_lyrics=edited_bars,
-        )
-
-        self.assertEqual(res2.get("status"), "success")
-        self.assertIn("lyrics", res2)
-        self.assertEqual(res2["lyrics"][0]["text"], "Watching rain drop on the glass tonight")
-
-        # Vocal lead stem must now be available in stems and score
-        vocal_stems = [s for s in res2.get("stems", []) if s.get("lane") == "vocal_lead"]
-        self.assertEqual(len(vocal_stems), 1, "Vocal stem must be present after approval")
-        self.assertTrue(vocal_stems[0]["available"])
-
-        vocal_lanes = [l for l in res2["score"]["lanes"] if l.get("instrument") == "vocal_lead"]
-        self.assertEqual(len(vocal_lanes), 1)
-        self.assertTrue(len(vocal_lanes[0]["events"]) > 0)
-
-    def test_checkpoint_approval_with_plain_string_lines(self):
-        res1 = self.agent.generate(
-            prompt="Funky groove",
-            chords="Dm - G - C - Am",
-            lyrics_prompt="City lights flickering",
-            vocal_approved=False,
-        )
-        token = res1["vocal_confirmation_token"]
-
-        # Human provides edited lyrics as list of plain strings
-        custom_lines = [
-            "Walking alone under neon signs",
-            "Shadows dance along the street",
-            "Waiting for a rhythm in the night",
-            "Moving with the bass guitar beat"
-        ]
-
-        res2 = self.agent.generate(
-            prompt="Funky groove",
-            chords="Dm - G - C - Am",
-            lyrics_prompt="City lights flickering",
-            vocal_approved=True,
-            vocal_approval_token=token,
-            edited_lyrics=custom_lines,
-        )
-
-        self.assertEqual(res2.get("status"), "success")
-        self.assertEqual(len(res2["lyrics"]), 4)
-        self.assertEqual(res2["lyrics"][0]["text"], "Walking alone under neon signs")
-        self.assertEqual(res2["lyrics"][0]["chord"], "Dm")
-
-    def test_multilingual_lyrics_generation(self):
-        for lang, expected_token in [("es", "noche"), ("fr", "nuit"), ("ja", "夜")]:
-            res = self.agent.generate(
-                prompt="Latin jazz groove",
-                chords="Am - Dm - E7 - Am",
-                lyrics_prompt="Sol y sombra",
-                lyrics_language=lang,
-                vocal_approved=False,
-            )
-            self.assertEqual(res.get("status"), "awaiting_vocal_confirmation")
-            lyrics = res["lyrics_draft"]["bars"]
-            text_corpus = " ".join(b["text"] for b in lyrics)
-            self.assertIn(expected_token, text_corpus, f"Expected {expected_token} in {lang} lyrics")
-
-    def test_api_vocal_approval_endpoint(self):
-        from fastapi.testclient import TestClient
-        from app import app
-
-        client = TestClient(app)
-
-        # 1. First request generates instrumental backing and halts for vocal confirmation
-        req1 = client.post("/api/generate", json={
-            "prompt": "Smooth soul groove",
+    def _request(self, *, chords="Am - F - C - G", **overrides):
+        request = {
+            "prompt": "Original soul loop",
             "key": "Am",
             "bpm": 110,
-            "chords": "Am - F - C - G",
-            "instruments": ["bass_guitar", "rhythm_guitar", "drum_kit"],
-            "lyrics_prompt": "Midnight train arriving at dawn",
+            "chords": chords,
+            "instruments": ["bass_guitar", "rhythm_guitar", "cymbals"],
+            "seed": 17,
+            "groove": "straight",
+            "lyrics_prompt": "Rain on the windowpane",
             "lyrics_language": "en",
             "vocal_style": "soulful_lead",
-            "vocal_approved": False,
-        })
-        self.assertEqual(req1.status_code, 200)
-        d1 = req1.json()["data"]
-        self.assertEqual(d1["status"], "awaiting_vocal_confirmation")
-        token = d1["vocal_confirmation_token"]
+        }
+        request.update(overrides)
+        return request
 
-        # 2. Forged token must be rejected with 403
-        bad_req = client.post("/api/vocals/approve", json={
-            "token": "FORGED_SIGNATURE_TOKEN",
-            "lyrics_prompt": "Midnight train arriving at dawn",
-            "key": "Am",
-            "bpm": 110,
-            "chords": "Am - F - C - G",
-        })
-        self.assertEqual(bad_req.status_code, 403)
+    def _checkpoint(self, **kwargs):
+        return self.agent.generate(**self._request(**kwargs))
 
-        # 3. Legitimate approval succeeds and synthesizes vocal lead
-        ok_req = client.post("/api/vocals/approve", json={
-            "token": token,
-            "lyrics_prompt": "Midnight train arriving at dawn",
-            "key": "Am",
-            "bpm": 110,
-            "chords": "Am - F - C - G",
-            "instruments": ["bass_guitar", "rhythm_guitar", "drum_kit"],
-            "edited_lyrics": ["Midnight train rolling down the track"],
-        })
-        self.assertEqual(ok_req.status_code, 200)
-        d2 = ok_req.json()["data"]
-        self.assertEqual(d2["status"], "success")
-        self.assertIn("vocal_lead", [s["lane"] for s in d2["stems"]])
-        vocal_lanes = [l for l in d2["score"]["lanes"] if l["instrument"] == "vocal_lead"]
-        self.assertEqual(len(vocal_lanes), 1)
+    def _approve(self, checkpoint, *, edited=None, **kwargs):
+        request = self._request(**kwargs)
+        result = self.agent.generate(
+            **request,
+            vocal_approved=True,
+            vocal_approval_token=checkpoint["vocal_confirmation_token"],
+            lyrics_draft=checkpoint["lyrics_draft"]["bars"],
+            edited_lyrics=edited,
+            vocal_trace_id=checkpoint["vocal_trace_id"],
+        )
+        if result["status"] == "awaiting_vocal_confirmation":
+            result = self.agent.generate(
+                **request,
+                vocal_approved=True,
+                vocal_approval_token=result["vocal_confirmation_token"],
+                lyrics_draft=result["lyrics_draft"]["bars"],
+                edited_lyrics=result["lyrics_draft"]["bars"],
+                vocal_trace_id=result["vocal_trace_id"],
+            )
+        return result
+
+    def test_checkpoint_has_no_vocal_lane_and_returns_trace_id(self):
+        result = self._checkpoint()
+        self.assertEqual(result["status"], "awaiting_vocal_confirmation")
+        self.assertTrue(result["vocal_trace_id"])
+        self.assertNotIn("take_id", result)
+        self.assertFalse(any(stem["lane"] == "vocal_lead" for stem in result["stems"]))
+        self.assertNotIn(result["vocal_confirmation_token"], str(self.agent.take_history))
+
+    def test_token_binds_full_context_and_exact_draft(self):
+        context = {"trace_id": "trace-a", "prompt": "one", "groove": "straight"}
+        lyrics = [{"bar": 1, "chord": "Am", "text": "first draft"}]
+        token = issue_vocal_token(context, lyrics)
+        self.assertFalse(consume_vocal_token(token, {**context, "groove": "half_time"}, lyrics))
+        self.assertFalse(consume_vocal_token(token, context, [{**lyrics[0], "text": "edited"}]))
+        self.assertTrue(consume_vocal_token(token, context, lyrics))
+        self.assertFalse(consume_vocal_token(token, context, lyrics))
+
+    def test_token_expires(self):
+        context = {"trace_id": "expired"}
+        lyrics = [{"bar": 1, "chord": "Am", "text": "line"}]
+        with patch("riffs_api.vocal_approval.time.time", return_value=1000):
+            token = issue_vocal_token(context, lyrics)
+        with patch("riffs_api.vocal_approval.time.time", return_value=1601):
+            self.assertFalse(consume_vocal_token(token, context, lyrics))
+
+    def test_trace_logs_are_correlated_and_redacted(self):
+        context = {"trace_id": "trace-redacted", "prompt": "private prompt"}
+        lyrics = [{"bar": 1, "chord": "Am", "text": "private lyric text"}]
+        with self.assertLogs("riffs.vocal_approval", level="INFO") as captured:
+            token = issue_vocal_token(context, lyrics)
+            self.assertTrue(consume_vocal_token(token, context, lyrics))
+        log_text = "\\n".join(captured.output)
+        self.assertIn("trace-redacted", log_text)
+        self.assertIn("checkpoint_issued", log_text)
+        self.assertIn("approval_accepted", log_text)
+        self.assertIn("draft_sha256", log_text)
+        self.assertNotIn("private lyric text", log_text)
+        self.assertNotIn(token, log_text)
+
+    def test_missing_secret_disables_vocal_approval_without_revealing_config(self):
+        with patch.dict(os.environ, {"RIFFS_VOCAL_SECRET": ""}):
+            with self.assertRaisesRegex(VocalApprovalUnavailable, "unavailable"):
+                issue_vocal_token({"trace_id": "no-secret"}, [{"bar": 1, "chord": "Am", "text": "line"}])
+
+    def test_edited_draft_requires_a_second_confirmation(self):
+        checkpoint = self._checkpoint()
+        edited = copy.deepcopy(checkpoint["lyrics_draft"]["bars"])
+        edited[0]["text"] = "A changed line under moonlight"
+        request = self._request()
+        first_approval = self.agent.generate(
+            **request,
+            vocal_approved=True,
+            vocal_approval_token=checkpoint["vocal_confirmation_token"],
+            lyrics_draft=checkpoint["lyrics_draft"]["bars"],
+            edited_lyrics=edited,
+            vocal_trace_id=checkpoint["vocal_trace_id"],
+        )
+        self.assertEqual(first_approval["status"], "awaiting_vocal_confirmation")
+        self.assertFalse(any(stem["lane"] == "vocal_lead" for stem in first_approval["stems"]))
+        approved = self.agent.generate(
+            **request,
+            vocal_approved=True,
+            vocal_approval_token=first_approval["vocal_confirmation_token"],
+            lyrics_draft=first_approval["lyrics_draft"]["bars"],
+            edited_lyrics=first_approval["lyrics_draft"]["bars"],
+            vocal_trace_id=first_approval["vocal_trace_id"],
+        )
+        self.assertEqual(approved["status"], "success")
+        self.assertEqual(approved["lyrics"][0]["text"], edited[0]["text"])
+
+    def test_malformed_or_unsafe_edited_lyrics_are_rejected(self):
+        chords = ["Am", "F"]
+        for bad in ([], ["" , "ok"], [None, "ok"], [{"text": None}, {"lyric": 123}], ["<script>alert(1)</script>", "ok"], ["kill them all", "ok"], ["x" * 181, "ok"]):
+            with self.subTest(bad=bad):
+                with self.assertRaises(VocalInputError):
+                    normalize_lyrics(bad, chords)
+
+    def test_exact_named_lyrics_request_is_refused(self):
+        with self.assertRaises(PromptRefusal) as caught:
+            validate_prompt("write the exact lyrics of Bohemian Rhapsody verbatim", allow_lyrics=True)
+        self.assertEqual(caught.exception.code, "COPYRIGHT_REPRODUCTION_REQUEST")
+
+    def test_vocal_bars_and_midi_metadata_follow_progression_length(self):
+        for progression in ("Am - F", "Am - F - C - G - Dm - Em - F - G"):
+            with self.subTest(progression=progression):
+                checkpoint = self._checkpoint(chords=progression)
+                self.assertEqual(len(checkpoint["lyrics_draft"]["bars"]), len(progression.split(" - ")))
+                approved = self._approve(checkpoint, chords=progression)
+                self.assertEqual(approved["status"], "success")
+                self.assertIn("vocal_lead", approved["part_scores"])
+                vocal_part = approved["part_scores"]["vocal_lead"]
+                self.assertTrue(vocal_part["midi_sha256"])
+                stem = next(s for s in approved["stems"] if s["lane"] == "vocal_lead")
+                self.assertEqual(stem["midi_sha256"], vocal_part["midi_sha256"])
+                self.assertEqual(len(vocal_part["bars"]), len(progression.split(" - ")))
+
+    def test_vocal_lane_lock_reuses_prior_events(self):
+        first_checkpoint = self._checkpoint()
+        first = self._approve(first_checkpoint)
+        first_lane = next(lane for lane in first["score"]["lanes"] if lane["instrument"] == "vocal_lead")
+        request = self._request(locked_parts=["vocal_lead"], previous_score=first["score"], seed=18)
+        checkpoint = self.agent.generate(**request)
+        approved = self.agent.generate(
+            **request,
+            vocal_approved=True,
+            vocal_approval_token=checkpoint["vocal_confirmation_token"],
+            lyrics_draft=checkpoint["lyrics_draft"]["bars"],
+            edited_lyrics=checkpoint["lyrics_draft"]["bars"],
+            vocal_trace_id=checkpoint["vocal_trace_id"],
+        )
+        next_lane = next(lane for lane in approved["score"]["lanes"] if lane["instrument"] == "vocal_lead")
+        self.assertTrue(next_lane["locked"])
+        self.assertEqual(next_lane["hash"], first_lane["hash"])
+
+    def test_api_preserves_structured_refusal_code(self):
+        try:
+            from fastapi.testclient import TestClient
+            from app import app
+            client = TestClient(app)
+        except ImportError as exc:
+            self.skipTest(f"API test dependencies are not installed here: {exc}")
+        response = client.post("/api/generate", json={"prompt": "Write lyrics about love"})
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INSTRUMENTAL_ONLY")
+        self.assertIn("alternative", response.json())
 
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -28,7 +28,7 @@ _FULL_SONG = re.compile(
     re.IGNORECASE,
 )
 _COPY_INTENT = re.compile(
-    r"\b(?:copy|make|create|imitate|recreate|replicate|reproduce|clone|transcribe|play|generate)\b",
+    r"\b(?:write|copy|make|create|imitate|recreate|replicate|reproduce|clone|transcribe|play|generate)\b",
     re.IGNORECASE,
 )
 _EXACTNESS = re.compile(
@@ -41,6 +41,7 @@ _TITLE_LIKE_TEXT = re.compile(
     r"|\b[A-Z][a-zA-Z']{3,}\b"
 )
 _GENERIC_REFERENTS = {"my", "your", "our", "this", "that", "own", "original", "a", "an", "the"}
+_EXACT_LYRICS_REQUEST = re.compile(r"\b(?:exact|verbatim|word[- ]for[- ]word)\b.{0,30}\blyrics?\b.{0,40}\b(?:of|from)\s+[A-Z]", re.IGNORECASE)
 
 
 def _is_explicit_exact_copy(prompt: str) -> bool:
@@ -81,7 +82,7 @@ def validate_prompt(prompt: str, allow_lyrics: bool = False) -> None:
             "RIFFs is designed to create short practice and sketching loops, not complete songs.",
             "Ask for an original 4-to-16-bar instrumental loop instead.",
         )
-    if _is_explicit_exact_copy(prompt):
+    if _is_explicit_exact_copy(prompt) or _EXACT_LYRICS_REQUEST.search(prompt):
         raise PromptRefusal(
             "COPYRIGHT_REPRODUCTION_REQUEST",
             "RIFFs can’t reproduce a named song or recording note-for-note, verbatim, or exactly.",

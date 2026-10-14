@@ -21,7 +21,7 @@ flowchart TD
     %% Step 2: Harness
     subgraph HarnessBox ["2. AGENT HARNESS (Loop Manager & Context Feeder)"]
         Harness["Harness Loop Controller\n• Tracks Turn Counter (turn < 5?)\n• Tracks Collision Counter (retries < 2?)\n❌ Blind to semantic prompt words"]
-        SysPrompt["System Prompt Rules Injected:\n✅ ALLOWED: 1–3 instruments, modes, tempo, note vectors\n🚫 FORBIDDEN: Vocals/lyrics, full songs, verbatim commercial copies\n⚡ TRIGGER: 'exact' or 'note-for-note' ➔ Immediate Refusal (No Tool Call)"]
+        SysPrompt["System Prompt Rules Injected:\n✅ ALLOWED: 1–3 instruments, modes, tempo, note vectors\n🚫 FORBIDDEN: Full songs, verbatim commercial copies\n⚡ TRIGGER: 'exact' or 'note-for-note' ➔ Immediate Refusal (No Tool Call)"]
     end
 
     Harness --> SysPrompt
@@ -89,7 +89,7 @@ flowchart TD
 │    ──────────────────────────────────────────────────────────────────  │
 │    SYSTEM PROMPT BOUNDARIES INJECTED:                                  │
 │    ✅ ALLOWED TO DECIDE: 1–3 instruments, modes, chords, note vectors │
-│    🚫 FORBIDDEN TO DECIDE: Lyrics, vocals, full songs, verbatim copies │
+│    🚫 FORBIDDEN TO DECIDE: Full songs, verbatim copies; lyrics require human approval │
 │    ⚡ OBSERVABLE TRIGGER: "exact" or "note-for-note" ➔ Refuse (no tool)│
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
@@ -142,7 +142,7 @@ flowchart TD
    * Determines musical interplay between the 1 to 3 chosen instruments.
    * Generates the symbolic note arrays (pitches, durations, velocities).
 2. **Forbidden Decisions:**
-   * **No vocals or lyrics** under any circumstances.
+   * **Lyrics and vocal lead** require a short-lived approval token bound to the exact draft and request; full songs and verbatim commercial copies remain refused.
    * **No full-song arrangements** (strictly 4-to-16 bar loops).
 3. **Observable Refusal Trigger:**
    * If user prompt contains `"exact"`, `"note for note"`, or `"verbatim"` with a commercial song name $\rightarrow$ **Immediate refusal in text with zero tool calls**, proposing an original variation instead.

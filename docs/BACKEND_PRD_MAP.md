@@ -17,7 +17,7 @@ The PRD does not define an engineering milestone named Day 0 or Day 1. The Day 1
 | Take history | Keeps the latest five generated takes in the running application process and assigns monotonically increasing take IDs. This is in-memory state, not durable storage. |
 | Versioned score/export API | Exposes progression parsing, score drafts, and a ZIP with MIDI, MusicXML, chord chart JSON, and a manifest. |
 | Observable agent loop | Records observe/decide/act/observe history for parse, score, and symbolic export with a five-step cap; parse failures lead to a recorded clarification action. |
-| Prompt safety baseline | Rejects explicit lyric/vocal, complete-song, and named exact-copy requests before score generation and optional LLM enrichment; returns a structured refusal and safe alternative. |
+| Prompt safety and vocal approval | Lyrics use a separate human checkpoint; complete-song and explicit exact-copy requests are refused. Approval is signed to the full request and exact lyric draft, expires, and is single-use within a process. Cross-instance replay storage remains a deployment gap. |
 | Invalid input | Returns structured 422 responses for tempo, instrument selection, lock selection, and progression errors. |
 
 The versioned symbolic score remains a simple chord-tone block arrangement: one chord per 4/4 bar. `/api/generate` now offers three deterministic role-specific groove presets, but it does not generate freeform AI-authored note variations. Guitar tablature remains a chord-shape preview rather than a full fingering engine.

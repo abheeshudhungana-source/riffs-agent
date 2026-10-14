@@ -12,7 +12,7 @@
 - **Core Philosophy:** "The Recipe Before the Cake" — Symbolic notes (MIDI, Nashville Numbers, Chord Progressions) are drafted **first** as ground-truth, and subsequently rendered into authentic acoustic multisamples.
 - **Differentiator vs. Generative Audio (Suno/Udio):** We do not generate audio first and transcribe backward. Everything originates as verifiable symbolic notation.
 - **Scope Restrictions:**
-  1. Strictly instrumental riffs (No lyrics, no vocal synthesis).
+  1. Instrumental riffs by default. Lyrics and a symbolic vocal lead require the explicit human-approval checkpoint.
   2. Copyright Guardrail: Refuses 1:1 reproductions of copyrighted commercial master recordings.
   3. Video Support: Strictly headless video audio-replacement (`attach_riff_to_video` via FFmpeg `-c:v copy -an`). No video editor UI.
 

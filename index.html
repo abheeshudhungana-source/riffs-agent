@@ -1933,6 +1933,11 @@ E|---------------------------------------------------------5-3-0----|
         try {
           const approvePayload = {
             token: token,
+            prompt: payload.prompt,
+            previous_score: payload.previous_score,
+            locked_parts: payload.locked_parts,
+            lyrics_draft: (takeData.lyrics_draft && takeData.lyrics_draft.bars) || [],
+            vocal_trace_id: takeData.vocal_trace_id,
             lyrics_prompt: takeData.lyrics_prompt || payload.lyrics_prompt || 'Vocal song sketch',
             key: takeData.key || payload.key || 'Am',
             bpm: takeData.bpm || payload.bpm || 110,
@@ -1963,6 +1968,17 @@ E|---------------------------------------------------------5-3-0----|
 
           const json = await res.json();
           const d = (json && json.data) || {};
+          if (d.status === 'awaiting_vocal_confirmation') {
+            pendingVocalData.token = d.vocal_confirmation_token;
+            pendingVocalData.takeData = d;
+            const revisedBars = (d.lyrics_draft && d.lyrics_draft.bars) || [];
+            if ($('checkpoint-lyrics-edit')) $('checkpoint-lyrics-edit').value = revisedBars.map(b => b.text || b.lyric || '').join('\n');
+            modalError.textContent = 'Your edits changed the draft. Review the revised lyrics and approve again to continue.';
+            modalError.classList.remove('hidden');
+            btnApprove.disabled = false;
+            btnApprove.innerHTML = '✨ Approve &amp; Synthesize Voice';
+            return;
+          }
           const nextSeed = state.takes.length + 1;
           const newTakeData = {
             key: d.key || payload.key,

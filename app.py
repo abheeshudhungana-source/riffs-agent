@@ -1,4 +1,5 @@
 import os
+import uuid
 from pathlib import Path
 from typing import Literal, Optional, List, Dict, Any, Union
 from fastapi import FastAPI, Request
@@ -7,6 +8,7 @@ from pydantic import BaseModel, Field
 from riffs_api.progression import ProgressionError
 from riffs_api.routes import router as riff_routes
 from riffs_api.prompt_guardrails import PromptRefusal
+from riffs_api.vocal_approval import VocalApprovalError, VocalApprovalUnavailable, VocalInputError
 
 # Import the RIFFs agent harness
 try:
@@ -60,6 +62,8 @@ class GenerateRequest(BaseModel):
     vocal_approved: Optional[bool] = False
     vocal_approval_token: Optional[str] = None
     edited_lyrics: Optional[Union[List[str], List[Dict[str, Any]]]] = None
+    lyrics_draft: Optional[List[Dict[str, Any]]] = None
+    vocal_trace_id: Optional[str] = None
 
 
 ALLOWED_INSTRUMENTS = {
@@ -132,6 +136,14 @@ async def generate_riff(req: GenerateRequest):
             lock.lower() == instrument.lower()
             or lock.lower() in instrument.lower()
             or instrument.lower() in LOCK_ALIASES.get(lock.lower(), set())
+            or (
+                lock.lower() == "vocal_lead"
+                and bool(req.lyrics_prompt)
+                and any(
+                    isinstance(lane, dict) and lane.get("instrument") == "vocal_lead"
+                    for lane in (req.previous_score or {}).get("lanes", [])
+                )
+            )
             for instrument in instruments
         )
     ]
@@ -184,6 +196,7 @@ async def generate_riff(req: GenerateRequest):
             },
         )
 
+    trace_id = req.vocal_trace_id or (uuid.uuid4().hex if req.lyrics_prompt else None)
     try:
         # A fresh agent per request: serverless instances are shared between users,
         # so take state must come from the client (previous_score), never from memory.
@@ -205,11 +218,21 @@ async def generate_riff(req: GenerateRequest):
             vocal_approved=bool(req.vocal_approved),
             vocal_approval_token=req.vocal_approval_token,
             edited_lyrics=req.edited_lyrics,
+            lyrics_draft=req.lyrics_draft,
+            vocal_trace_id=trace_id,
         )
         return {
             "status": "success",
             "data": data
         }
+    except PromptRefusal as exc:
+        return JSONResponse(status_code=422, content={"status": "error", "code": exc.code, "detail": exc.detail, "alternative": exc.alternative, "trace_id": trace_id})
+    except VocalApprovalError as exc:
+        return JSONResponse(status_code=403, content={"status": "error", "code": "VOCAL_AUTH_FAILED", "detail": str(exc), "trace_id": trace_id})
+    except VocalApprovalUnavailable as exc:
+        return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_APPROVAL_UNAVAILABLE", "detail": str(exc), "trace_id": trace_id})
+    except VocalInputError as exc:
+        return JSONResponse(status_code=422, content={"status": "error", "code": "VOCAL_INPUT_INVALID", "detail": str(exc), "trace_id": trace_id})
     except ProgressionError as exc:
         return JSONResponse(
             status_code=422,
@@ -219,6 +242,7 @@ async def generate_riff(req: GenerateRequest):
                 "detail": str(exc),
             },
         )
+
     except ValueError as exc:
         return JSONResponse(
             status_code=422,
@@ -227,16 +251,6 @@ async def generate_riff(req: GenerateRequest):
                 "code": "CHORD_SYNTAX",
                 "detail": str(exc)
             }
-        )
-    except PromptRefusal as exc:
-        return JSONResponse(
-            status_code=422,
-            content={
-                "status": "error",
-                "code": exc.code,
-                "detail": exc.detail,
-                "alternative": exc.alternative,
-            },
         )
     except Exception as exc:
         return JSONResponse(
@@ -251,12 +265,17 @@ async def generate_riff(req: GenerateRequest):
 
 class VocalApproveRequest(BaseModel):
     token: str
+    prompt: Optional[str] = "Accompaniment with lead vocal track"
+    previous_score: Optional[Dict[str, Any]] = None
+    locked_parts: Optional[List[str]] = Field(default_factory=list)
     lyrics_prompt: str
     key: Optional[str] = "Am"
     bpm: Optional[int] = 110
     chords: Optional[str] = "Am - F - C - G"
     instruments: Optional[List[str]] = Field(default_factory=lambda: ["bass_guitar", "rhythm_guitar", "cymbals"])
     edited_lyrics: Optional[Union[List[str], List[Dict[str, Any]]]] = None
+    lyrics_draft: Optional[List[Dict[str, Any]]] = None
+    vocal_trace_id: Optional[str] = None
     seed: Optional[int] = None
     groove: Literal["straight", "half_time", "swing"] = "straight"
     vocal_style: Optional[str] = "soulful_lead"
@@ -265,9 +284,12 @@ class VocalApproveRequest(BaseModel):
 
 @app.post("/api/vocals/approve")
 async def approve_vocal_track(req: VocalApproveRequest):
+    trace_id = req.vocal_trace_id or uuid.uuid4().hex
     try:
         data = RiffsAgent().generate(
-            prompt="Accompaniment with lead vocal track",
+            prompt=req.prompt or "Accompaniment with lead vocal track",
+            previous_score=req.previous_score,
+            locked_parts=req.locked_parts or [],
             key=req.key or "Am",
             bpm=req.bpm or 110,
             chords=req.chords or "Am - F - C - G",
@@ -280,10 +302,20 @@ async def approve_vocal_track(req: VocalApproveRequest):
             vocal_approved=True,
             vocal_approval_token=req.token,
             edited_lyrics=req.edited_lyrics,
+            lyrics_draft=req.lyrics_draft,
+            vocal_trace_id=trace_id,
         )
         return {"status": "success", "data": data}
+    except VocalApprovalError as exc:
+        return JSONResponse(status_code=403, content={"status": "error", "code": "VOCAL_AUTH_FAILED", "detail": str(exc), "trace_id": trace_id})
+    except VocalApprovalUnavailable as exc:
+        return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_APPROVAL_UNAVAILABLE", "detail": str(exc), "trace_id": trace_id})
+    except VocalInputError as exc:
+        return JSONResponse(status_code=422, content={"status": "error", "code": "VOCAL_INPUT_INVALID", "detail": str(exc), "trace_id": trace_id})
+    except PromptRefusal as exc:
+        return JSONResponse(status_code=422, content={"status": "error", "code": exc.code, "detail": exc.detail, "alternative": exc.alternative, "trace_id": trace_id})
     except ValueError as exc:
-        return JSONResponse(status_code=403, content={"status": "error", "code": "VOCAL_AUTH_FAILED", "detail": str(exc)})
+        return JSONResponse(status_code=422, content={"status": "error", "code": "LYRICS_INVALID", "detail": str(exc), "trace_id": trace_id})
     except Exception as exc:
         return JSONResponse(status_code=500, content={"status": "error", "code": "VOCAL_RENDER_FAILED", "detail": str(exc)})
 
@@ -317,6 +349,7 @@ async def attach_video_endpoint(req: VideoRemuxRequest):
             "remux_mode": result["remux_mode"],
             "video_base64": base64.b64encode(result["content"]).decode("ascii"),
         }
+
     except ValueError as exc:
         return JSONResponse(
             status_code=422,

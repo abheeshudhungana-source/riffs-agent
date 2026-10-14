@@ -49,7 +49,7 @@ TOTAL DURATION: 3 Minutes 30 Seconds (Safe buffer under 4:00)
 >
 > In our PRD, we prioritized two core personas: **70% short-form creators** who need custom, royalty-safe background riffs dubbed onto raw phone footage in under 1.5 seconds, and **30% working musicians and learners** who need Nashville chord charts, guitar tabs, and tempo trainers.
 >
-> To keep the agent’s blast radius contained, our PRD sets three non-negotiable boundaries: strictly instrumental riffs—no vocal synthesis, an anti-plagiarism melodic contour guardrail that refuses commercial copies, and headless video muxing with zero video editor UI."
+> To keep the agent’s blast radius contained, our PRD sets three non-negotiable boundaries: instrumental riffs by default with a human approval checkpoint for symbolic vocals, an anti-plagiarism melodic contour guardrail that refuses commercial copies, and headless video muxing with zero video editor UI."
 
 ---
 
