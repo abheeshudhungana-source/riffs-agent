@@ -45,12 +45,21 @@ _CHORD_RE = re.compile(r"^([A-G][#b]?)(.*?)(?:/([A-G][#b]?))?$")
 _NASHVILLE_RE = re.compile(r"^([b#]?)([1-7])(.*?)(?:/([b#]?[1-7]))?$")
 
 
+_ROMAN_MAP = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7}
+_ROMAN_RE = re.compile(r"^([b#]?)(VII|VI|IV|V|III|II|I)(.*?)(?:/([b#]?(?:VII|VI|IV|V|III|II|I|[1-7])))?$", re.IGNORECASE)
+
+
 def parse_key(key: Optional[str]) -> Tuple[int, bool]:
-    """Return (tonic pitch class, is_minor) for keys like 'Am', 'C', 'F#m'."""
+    """Return (tonic pitch class, is_minor) for keys like 'Am', 'C', 'F#m', 'C major'."""
     key = (key or "Am").strip()
-    minor = key.endswith("m") and not key.endswith("maj")
-    root = key[:-1] if minor else key
-    return PITCH_CLASS.get(root, 9 if minor else 0), minor
+    parts = key.split()
+    root_part = parts[0]
+    minor = (
+        (len(parts) > 1 and "min" in parts[1].lower())
+        or (root_part.endswith("m") and not root_part.lower().endswith("maj"))
+    )
+    clean_root = root_part[:-1] if (root_part.endswith("m") and not root_part.lower().endswith("maj")) else root_part
+    return PITCH_CLASS.get(clean_root, 9 if minor else 0), minor
 
 
 def quality_to_intervals(quality: str) -> List[int]:
@@ -86,7 +95,7 @@ def quality_to_intervals(quality: str) -> List[int]:
 
 
 def parse_chord(token: str, key: Optional[str]) -> Dict[str, Any]:
-    """Parse a chord name ('Am7', 'C/G') or Nashville number ('b6', '1m')."""
+    """Parse a chord name ('Am7', 'C/G'), Nashville number ('b6', '1m'), or Roman numeral ('I', 'vi')."""
     tonic, _minor = parse_key(key)
     token = (token or "").strip()
     nash = _NASHVILLE_RE.match(token)
@@ -98,6 +107,21 @@ def parse_chord(token: str, key: Optional[str]) -> Dict[str, Any]:
         if bass:
             b_acc = -1 if bass.startswith("b") else 1 if bass.startswith("#") else 0
             bass_pc = (tonic + MAJOR_SCALE[int(bass[-1]) - 1] + b_acc) % 12
+        return {"symbol": token, "root_pc": root_pc, "intervals": quality_to_intervals(quality), "bass_pc": bass_pc}
+    roman = _ROMAN_RE.match(token)
+    if roman:
+        accidental, r_deg, quality, bass = roman.groups()
+        degree = _ROMAN_MAP[r_deg.upper()]
+        if r_deg.islower() and not quality:
+            quality = "m"
+        offset = MAJOR_SCALE[degree - 1] + (-1 if accidental == "b" else 1 if accidental == "#" else 0)
+        root_pc = (tonic + offset) % 12
+        bass_pc = None
+        if bass:
+            b_acc = -1 if bass.startswith("b") else 1 if bass.startswith("#") else 0
+            b_clean = bass.lstrip("b#")
+            b_deg = _ROMAN_MAP.get(b_clean.upper(), int(b_clean[-1]) if b_clean[-1].isdigit() else 1)
+            bass_pc = (tonic + MAJOR_SCALE[b_deg - 1] + b_acc) % 12
         return {"symbol": token, "root_pc": root_pc, "intervals": quality_to_intervals(quality), "bass_pc": bass_pc}
     match = _CHORD_RE.match(token)
     if not match or match.group(1) not in PITCH_CLASS:
@@ -545,6 +569,7 @@ def compose(
     seed: int = 1,
     locked_parts: Optional[List[str]] = None,
     previous_score: Optional[Dict[str, Any]] = None,
+    groove: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build the symbolic score. Locked lanes are copied verbatim from previous_score."""
     if not chords:
@@ -554,6 +579,10 @@ def compose(
     loop_bars = 16 if len(parsed) > 8 else 8
     bars = _bars_to_chords(parsed, loop_bars)
     feel = parse_feel(prompt)
+    if groove == "swing":
+        feel["swing"] = max(feel.get("swing", 0), 0.667)
+    elif groove == "half_time":
+        feel["kick"] = "half"
     symbols = [c["symbol"] for c in parsed]
 
     previous_lanes: Dict[Tuple[str, str], Dict[str, Any]] = {}

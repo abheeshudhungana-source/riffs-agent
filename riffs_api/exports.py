@@ -38,7 +38,9 @@ def _midi_variable_length(value: int) -> bytes:
     return bytes(result)
 
 
-def midi_bytes(score: ScoreDraft) -> bytes:
+def midi_bytes(score: ScoreDraft, channel: int = 0) -> bytes:
+    if not 0 <= channel <= 15:
+        raise ValueError("MIDI channel must be between 0 and 15.")
     ticks_per_beat = 480
     microseconds_per_beat = round(60_000_000 / score.tempo_bpm)
     events: list[tuple[int, int, bytes]] = [
@@ -50,10 +52,10 @@ def midi_bytes(score: ScoreDraft) -> bytes:
     for bar_index, bar in enumerate(score.bars):
         bar_start = bar_index * score.beats_per_bar * ticks_per_beat
         for note in bar.notes:
-            start = bar_start + note.onset_beats * ticks_per_beat
-            end = start + note.duration_beats * ticks_per_beat
-            events.append((start, 4, bytes((0x90, note.pitch_midi, note.velocity))))
-            events.append((end, 3, bytes((0x80, note.pitch_midi, 0))))
+            start = bar_start + round(note.onset_beats * ticks_per_beat)
+            end = start + round(note.duration_beats * ticks_per_beat)
+            events.append((start, 4, bytes((0x90 | channel, note.pitch_midi, note.velocity))))
+            events.append((end, 3, bytes((0x80 | channel, note.pitch_midi, 0))))
 
     last_tick = max((event[0] for event in events), default=0)
     events.append((last_tick, 5, b"\xff\x2f\x00"))

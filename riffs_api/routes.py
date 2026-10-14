@@ -104,6 +104,7 @@ class AgentLoopRequest(BaseModel):
     key: str | None = Field(default=None, description="Required for Nashville-number progressions.")
     tempo_bpm: int = Field(default=120, ge=40, le=240)
     max_steps: int = Field(default=5, ge=1, le=5)
+    prompt: str = Field(default="", max_length=2000, description="Optional creative direction checked against RIFFs guardrails before parsing.")
 
 
 @router.post("/api/v1/progressions/parse", response_model=ParseProgressionResponse)
@@ -173,6 +174,7 @@ def run_agent_loop_endpoint(request: AgentLoopRequest) -> dict:
         request.progression,
         request.key,
         request.tempo_bpm,
+        prompt=request.prompt,
     )
     history = run_loop(env, max_steps=request.max_steps)
     final_state = env.get_state()

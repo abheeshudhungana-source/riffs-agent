@@ -43,6 +43,10 @@
         <span id="hud-bpm" class="font-bold text-emerald-400">110</span>
       </div>
       <div class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2">
+        <span class="text-slate-400">GROOVE:</span>
+        <span id="hud-groove" class="font-bold text-cyan-400 uppercase">straight</span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg flex items-center gap-2">
         <span class="text-slate-400">TAKE:</span>
         <span id="hud-take" class="font-bold text-purple-400">Take 1</span>
       </div>
@@ -84,6 +88,21 @@
                  class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm mono text-amber-300 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition" />
           <p id="chords-error" role="alert" class="hidden text-[11px] text-rose-400 mt-1"></p>
           <p class="text-[11px] text-slate-400 mt-1">The agent builds the accompaniment around your chords.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Groove Feel Preset</label>
+          <div class="grid grid-cols-3 gap-2 text-xs">
+            <button type="button" class="groove-pill-btn rounded-lg border border-cyan-500 bg-cyan-500/20 text-cyan-300 px-2 py-1.5 font-bold transition flex items-center justify-center gap-1 cursor-pointer" data-groove="straight">
+              <span>Straight</span>
+            </button>
+            <button type="button" class="groove-pill-btn rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500 px-2 py-1.5 transition flex items-center justify-center gap-1 cursor-pointer" data-groove="half_time">
+              <span>Half-Time</span>
+            </button>
+            <button type="button" class="groove-pill-btn rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500 px-2 py-1.5 transition flex items-center justify-center gap-1 cursor-pointer" data-groove="swing">
+              <span>Swing</span>
+            </button>
+          </div>
         </div>
 
         <!-- GENERATE BUTTON -->
@@ -277,7 +296,8 @@
           <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 px-3.5 py-2 rounded-xl text-xs">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-amber-400"></span>
-              <span class="font-semibold text-slate-200">Saxophone (Lead)</span>
+              <span class="font-semibold text-slate-200" id="lane-name-lead">Rhythm Guitar (Lead)</span>
+              <span id="lane-groove-lead" class="text-[10px] bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded mono uppercase">straight</span>
             </div>
             <button class="lock-part-btn text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 font-mono" data-lane="lead">
               <span>🔓 Unlock</span>
@@ -287,7 +307,8 @@
           <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 px-3.5 py-2 rounded-xl text-xs">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
-              <span class="font-semibold text-slate-200">Bass Guitar (Rhythm)</span>
+              <span class="font-semibold text-slate-200" id="lane-name-bass">Bass Guitar (Bass)</span>
+              <span id="lane-groove-bass" class="text-[10px] bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded mono uppercase">straight</span>
             </div>
             <button class="lock-part-btn text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-mono font-bold" data-lane="bass">
               <span>🔒 Locked</span>
@@ -297,7 +318,8 @@
           <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800/80 px-3.5 py-2 rounded-xl text-xs">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span class="font-semibold text-slate-200">Acoustic Drums (Percussion)</span>
+              <span class="font-semibold text-slate-200" id="lane-name-drums">Cymbals (Percussion)</span>
+              <span id="lane-groove-drums" class="text-[10px] bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded mono uppercase">straight</span>
             </div>
             <button class="lock-part-btn text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 font-mono" data-lane="drums">
               <span>🔓 Unlock</span>
@@ -411,7 +433,7 @@ E|---------------------------------------------------------5-3-0----|
         </div>
       </fieldset>
 
-      <div class="mt-4 grid grid-cols-2 gap-3">
+      <div class="mt-4 grid grid-cols-3 gap-3">
         <div>
           <label for="select-key" class="text-xs text-slate-500">Key</label>
           <select id="select-key" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100">
@@ -424,6 +446,14 @@ E|---------------------------------------------------------5-3-0----|
         <div>
           <label for="input-bpm" class="text-xs text-slate-500">Tempo (BPM)</label>
           <input id="input-bpm" type="number" min="60" max="200" value="110" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100" />
+        </div>
+        <div>
+          <label for="select-groove" class="text-xs text-slate-500">Groove Preset</label>
+          <select id="select-groove" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100">
+            <option value="straight" selected>Straight</option>
+            <option value="half_time">Half-Time</option>
+            <option value="swing">Swing</option>
+          </select>
         </div>
       </div>
 
@@ -742,7 +772,7 @@ E|---------------------------------------------------------5-3-0----|
   <!-- RIFFs WEB AUDIO ENGINE & INTERACTIVITY SCRIPT -->
   <script>
     // Embedded Initial Take 1 (Seed 1, Key Am, 110 BPM, Funky Neo-Soul)
-    var INITIAL_TAKE = {"id": 1, "payload": {"key": "Am", "bpm": 110, "chords": ["Am", "F", "C", "G"], "nashville_chart": ["1m", "b6", "b3", "b7"], "tab_score": "e|---0---|---1---|---0---|---3---|\nB|---1---|---1---|---1---|---0---|\nG|---2---|---2---|---0---|---0---|\nD|---2---|---3---|---2---|---0---|\nA|---0---|---3---|---3---|---2---|\nE|---x---|---1---|---x---|---3---|", "stems": [{"lane": "bass_guitar", "filename": "riff_Am_110bpm_bass_guitar.wav", "locked": false}, {"lane": "rhythm_guitar", "filename": "riff_Am_110bpm_rhythm_guitar.wav", "locked": false}, {"lane": "cymbals", "filename": "riff_Am_110bpm_cymbals.wav", "locked": false}], "license_certificate": {"license_id": "CERT-RIFFS-2026-X9B3B79C6", "status": "100% Royalty-Free Multisample Acoustic Engine", "terms": "Cleared for commercial release, live streaming, and DAW multi-track arrangement."}, "seed": 1, "score": {"version": 1, "key": "Am", "beats_per_bar": 4, "loop_bars": 8, "seed": 1, "feel": {"tags": ["neo-soul"], "swing": 0.45}, "bars": [{"bar": 1, "chord": "Am"}, {"bar": 2, "chord": "Am"}, {"bar": 3, "chord": "F"}, {"bar": 4, "chord": "F"}, {"bar": 5, "chord": "C"}, {"bar": 6, "chord": "C"}, {"bar": 7, "chord": "G"}, {"bar": 8, "chord": "G"}], "lanes": [{"tier": "low", "instrument": "bass_guitar", "locked": false, "source": "generated", "hash": "00885da2c5880c60592ced1a29565b879294560c3ba2267099567b4daf0ac5c4", "events": [{"beat": 0, "dur": 1.5, "midi": 33, "vel": 94}, {"beat": 1.575, "dur": 0.5, "midi": 33, "vel": 76}, {"beat": 2, "dur": 1.5, "midi": 40, "vel": 85}, {"beat": 3.575, "dur": 0.5, "midi": 34, "vel": 75}, {"beat": 4, "dur": 1.5, "midi": 33, "vel": 89}, {"beat": 5.575, "dur": 0.5, "midi": 33, "vel": 72}, {"beat": 6, "dur": 1.5, "midi": 40, "vel": 85}, {"beat": 7.575, "dur": 0.5, "midi": 42, "vel": 67}, {"beat": 8, "dur": 0.75, "midi": 41, "vel": 92}, {"beat": 9.575, "dur": 0.5, "midi": 41, "vel": 72}, {"beat": 10.575, "dur": 0.75, "midi": 36, "vel": 83}, {"beat": 11.25, "dur": 0.5, "midi": 42, "vel": 71}, {"beat": 12, "dur": 2.5, "midi": 41, "vel": 89}, {"beat": 15, "dur": 0.5, "midi": 36, "vel": 74}, {"beat": 15.575, "dur": 0.5, "midi": 35, "vel": 68}, {"beat": 16, "dur": 0.75, "midi": 36, "vel": 95}, {"beat": 17.575, "dur": 0.5, "midi": 36, "vel": 72}, {"beat": 18.575, "dur": 0.75, "midi": 43, "vel": 81}, {"beat": 19.25, "dur": 0.5, "midi": 37, "vel": 72}, {"beat": 20, "dur": 1.5, "midi": 36, "vel": 92}, {"beat": 21.575, "dur": 0.5, "midi": 36, "vel": 72}, {"beat": 22, "dur": 1.5, "midi": 43, "vel": 84}, {"beat": 23.575, "dur": 0.5, "midi": 32, "vel": 70}, {"beat": 24, "dur": 0.75, "midi": 31, "vel": 95}, {"beat": 25.575, "dur": 0.5, "midi": 31, "vel": 72}, {"beat": 26.575, "dur": 0.75, "midi": 38, "vel": 86}, {"beat": 27.25, "dur": 0.5, "midi": 32, "vel": 69}, {"beat": 28, "dur": 0.75, "midi": 31, "vel": 96}, {"beat": 29.575, "dur": 0.5, "midi": 31, "vel": 66}, {"beat": 30.575, "dur": 0.75, "midi": 38, "vel": 85}, {"beat": 31.25, "dur": 0.5, "midi": 34, "vel": 64}]}, {"tier": "mid", "instrument": "rhythm_guitar", "locked": false, "source": "generated", "hash": "2b283f7cfbd331ff851843418ba745697e8b9ec427c59284a3af1f8cc72a632e", "events": [{"beat": 0.0, "dur": 1.5, "midi": 57, "vel": 90}, {"beat": 0.012, "dur": 1.5, "midi": 60, "vel": 86}, {"beat": 0.024, "dur": 1.5, "midi": 64, "vel": 83}, {"beat": 1.575, "dur": 1, "midi": 64, "vel": 71}, {"beat": 1.587, "dur": 1, "midi": 60, "vel": 73}, {"beat": 1.599, "dur": 1, "midi": 57, "vel": 69}, {"beat": 2.575, "dur": 0.5, "midi": 64, "vel": 60}, {"beat": 2.587, "dur": 0.5, "midi": 60, "vel": 61}, {"beat": 2.599, "dur": 0.5, "midi": 57, "vel": 63}, {"beat": 3.0, "dur": 1, "midi": 57, "vel": 79}, {"beat": 3.012, "dur": 1, "midi": 60, "vel": 80}, {"beat": 3.024, "dur": 1, "midi": 64, "vel": 78}, {"beat": 4.0, "dur": 0.5, "midi": 57, "vel": 79}, {"beat": 4.012, "dur": 0.5, "midi": 60, "vel": 77}, {"beat": 4.024, "dur": 0.5, "midi": 64, "vel": 80}, {"beat": 5.575, "dur": 0.5, "midi": 64, "vel": 74}, {"beat": 5.587, "dur": 0.5, "midi": 60, "vel": 72}, {"beat": 5.599, "dur": 0.5, "midi": 57, "vel": 70}, {"beat": 6.575, "dur": 0.5, "midi": 64, "vel": 76}, {"beat": 6.587, "dur": 0.5, "midi": 60, "vel": 73}, {"beat": 6.599, "dur": 0.5, "midi": 57, "vel": 77}, {"beat": 7.575, "dur": 0.5, "midi": 64, "vel": 73}, {"beat": 7.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 7.599, "dur": 0.5, "midi": 57, "vel": 68}, {"beat": 8.0, "dur": 1.5, "midi": 57, "vel": 88}, {"beat": 8.012, "dur": 1.5, "midi": 60, "vel": 85}, {"beat": 8.024, "dur": 1.5, "midi": 65, "vel": 87}, {"beat": 9.575, "dur": 1, "midi": 65, "vel": 77}, {"beat": 9.587, "dur": 1, "midi": 60, "vel": 70}, {"beat": 9.599, "dur": 1, "midi": 57, "vel": 70}, {"beat": 10.575, "dur": 0.5, "midi": 65, "vel": 61}, {"beat": 10.587, "dur": 0.5, "midi": 60, "vel": 64}, {"beat": 10.599, "dur": 0.5, "midi": 57, "vel": 57}, {"beat": 11.0, "dur": 1, "midi": 57, "vel": 77}, {"beat": 11.012, "dur": 1, "midi": 60, "vel": 77}, {"beat": 11.024, "dur": 1, "midi": 65, "vel": 78}, {"beat": 12.0, "dur": 0.5, "midi": 57, "vel": 84}, {"beat": 12.012, "dur": 0.5, "midi": 60, "vel": 80}, {"beat": 12.024, "dur": 0.5, "midi": 65, "vel": 80}, {"beat": 13.575, "dur": 0.5, "midi": 65, "vel": 81}, {"beat": 13.587, "dur": 0.5, "midi": 60, "vel": 76}, {"beat": 13.599, "dur": 0.5, "midi": 57, "vel": 74}, {"beat": 14.575, "dur": 0.5, "midi": 65, "vel": 80}, {"beat": 14.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 14.599, "dur": 0.5, "midi": 57, "vel": 72}, {"beat": 15.575, "dur": 0.5, "midi": 65, "vel": 73}, {"beat": 15.587, "dur": 0.5, "midi": 60, "vel": 64}, {"beat": 15.599, "dur": 0.5, "midi": 57, "vel": 63}, {"beat": 16.0, "dur": 2, "midi": 55, "vel": 89}, {"beat": 16.012, "dur": 2, "midi": 60, "vel": 85}, {"beat": 16.024, "dur": 2, "midi": 64, "vel": 82}, {"beat": 18.0, "dur": 2, "midi": 55, "vel": 81}, {"beat": 18.012, "dur": 2, "midi": 60, "vel": 77}, {"beat": 18.024, "dur": 2, "midi": 64, "vel": 77}, {"beat": 20.0, "dur": 0.5, "midi": 55, "vel": 83}, {"beat": 20.012, "dur": 0.5, "midi": 60, "vel": 83}, {"beat": 20.024, "dur": 0.5, "midi": 64, "vel": 77}, {"beat": 21.575, "dur": 0.5, "midi": 64, "vel": 75}, {"beat": 21.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 21.599, "dur": 0.5, "midi": 55, "vel": 77}, {"beat": 22.575, "dur": 0.5, "midi": 64, "vel": 77}, {"beat": 22.587, "dur": 0.5, "midi": 60, "vel": 78}, {"beat": 22.599, "dur": 0.5, "midi": 55, "vel": 76}, {"beat": 23.575, "dur": 0.5, "midi": 64, "vel": 73}, {"beat": 23.587, "dur": 0.5, "midi": 60, "vel": 72}, {"beat": 23.599, "dur": 0.5, "midi": 55, "vel": 70}, {"beat": 24.0, "dur": 2, "midi": 55, "vel": 82}, {"beat": 24.012, "dur": 2, "midi": 59, "vel": 79}, {"beat": 24.024, "dur": 2, "midi": 62, "vel": 83}, {"beat": 26.0, "dur": 2, "midi": 55, "vel": 77}, {"beat": 26.012, "dur": 2, "midi": 59, "vel": 74}, {"beat": 26.024, "dur": 2, "midi": 62, "vel": 75}, {"beat": 28.0, "dur": 1.5, "midi": 55, "vel": 83}, {"beat": 28.012, "dur": 1.5, "midi": 59, "vel": 81}, {"beat": 28.024, "dur": 1.5, "midi": 62, "vel": 80}, {"beat": 29.575, "dur": 1, "midi": 62, "vel": 79}, {"beat": 29.587, "dur": 1, "midi": 59, "vel": 77}, {"beat": 29.599, "dur": 1, "midi": 55, "vel": 69}, {"beat": 30.575, "dur": 0.5, "midi": 62, "vel": 66}, {"beat": 30.587, "dur": 0.5, "midi": 59, "vel": 66}, {"beat": 30.599, "dur": 0.5, "midi": 55, "vel": 65}, {"beat": 31.0, "dur": 1, "midi": 55, "vel": 75}, {"beat": 31.012, "dur": 1, "midi": 59, "vel": 80}, {"beat": 31.024, "dur": 1, "midi": 62, "vel": 76}]}, {"tier": "high", "instrument": "cymbals", "locked": false, "source": "generated", "hash": "d53fa5b02c90a5818dc8502b38f981d12da7d6943111a51110525b46b1540bdd", "events": [{"beat": 0.0, "dur": 2.0, "midi": 49, "vel": 89}, {"beat": 0, "dur": 1, "midi": 51, "vel": 82}, {"beat": 1, "dur": 1, "midi": 51, "vel": 70}, {"beat": 1.575, "dur": 0.5, "midi": 51, "vel": 53}, {"beat": 2, "dur": 1, "midi": 51, "vel": 78}, {"beat": 3, "dur": 1, "midi": 51, "vel": 69}, {"beat": 3.575, "dur": 0.5, "midi": 51, "vel": 58}, {"beat": 4, "dur": 1, "midi": 51, "vel": 76}, {"beat": 5, "dur": 1, "midi": 51, "vel": 77}, {"beat": 5.575, "dur": 0.5, "midi": 51, "vel": 52}, {"beat": 6, "dur": 1, "midi": 51, "vel": 80}, {"beat": 7, "dur": 1, "midi": 51, "vel": 77}, {"beat": 7.575, "dur": 0.5, "midi": 51, "vel": 54}, {"beat": 8, "dur": 1, "midi": 51, "vel": 83}, {"beat": 9, "dur": 1, "midi": 51, "vel": 72}, {"beat": 9.575, "dur": 0.5, "midi": 51, "vel": 57}, {"beat": 10, "dur": 1, "midi": 51, "vel": 81}, {"beat": 11, "dur": 1, "midi": 51, "vel": 72}, {"beat": 11.575, "dur": 0.5, "midi": 51, "vel": 56}, {"beat": 12, "dur": 1, "midi": 51, "vel": 83}, {"beat": 13, "dur": 1, "midi": 51, "vel": 69}, {"beat": 13.575, "dur": 0.5, "midi": 51, "vel": 60}, {"beat": 14, "dur": 1, "midi": 51, "vel": 81}, {"beat": 15, "dur": 1, "midi": 51, "vel": 76}, {"beat": 15.575, "dur": 0.5, "midi": 51, "vel": 53}, {"beat": 16, "dur": 1, "midi": 51, "vel": 79}, {"beat": 17, "dur": 1, "midi": 51, "vel": 71}, {"beat": 17.575, "dur": 0.5, "midi": 51, "vel": 59}, {"beat": 18, "dur": 1, "midi": 51, "vel": 80}, {"beat": 19, "dur": 1, "midi": 51, "vel": 77}, {"beat": 19.575, "dur": 0.5, "midi": 51, "vel": 55}, {"beat": 20, "dur": 1, "midi": 51, "vel": 83}, {"beat": 21, "dur": 1, "midi": 51, "vel": 67}, {"beat": 21.575, "dur": 0.5, "midi": 51, "vel": 57}, {"beat": 22, "dur": 1, "midi": 51, "vel": 84}, {"beat": 23, "dur": 1, "midi": 51, "vel": 77}, {"beat": 23.575, "dur": 0.5, "midi": 51, "vel": 59}, {"beat": 24, "dur": 1, "midi": 51, "vel": 81}, {"beat": 25, "dur": 1, "midi": 51, "vel": 70}, {"beat": 25.575, "dur": 0.5, "midi": 51, "vel": 60}, {"beat": 26, "dur": 1, "midi": 51, "vel": 74}, {"beat": 27, "dur": 1, "midi": 51, "vel": 77}, {"beat": 27.575, "dur": 0.5, "midi": 51, "vel": 56}, {"beat": 28, "dur": 1, "midi": 51, "vel": 81}, {"beat": 29, "dur": 1, "midi": 51, "vel": 70}, {"beat": 29.575, "dur": 0.5, "midi": 51, "vel": 52}, {"beat": 30, "dur": 1, "midi": 51, "vel": 75}, {"beat": 31, "dur": 1, "midi": 51, "vel": 73}, {"beat": 31.575, "dur": 0.5, "midi": 51, "vel": 57}]}], "warnings": []}}};
+    var INITIAL_TAKE = {"id": 1, "payload": {"key": "Am", "bpm": 110, "groove": "straight", "chords": ["Am", "F", "C", "G"], "nashville_chart": ["1m", "b6", "b3", "b7"], "tab_score": "e|---0---|---1---|---0---|---3---|\nB|---1---|---1---|---1---|---0---|\nG|---2---|---2---|---0---|---0---|\nD|---2---|---3---|---2---|---0---|\nA|---0---|---3---|---3---|---2---|\nE|---x---|---1---|---x---|---3---|", "stems": [{"lane": "bass_guitar", "filename": "riff_Am_110bpm_bass_guitar.wav", "locked": false}, {"lane": "rhythm_guitar", "filename": "riff_Am_110bpm_rhythm_guitar.wav", "locked": false}, {"lane": "cymbals", "filename": "riff_Am_110bpm_cymbals.wav", "locked": false}], "license_certificate": {"license_id": "CERT-RIFFS-2026-X9B3B79C6", "status": "100% Royalty-Free Multisample Acoustic Engine", "terms": "Cleared for commercial release, live streaming, and DAW multi-track arrangement."}, "seed": 1, "score": {"version": 1, "key": "Am", "beats_per_bar": 4, "loop_bars": 8, "seed": 1, "feel": {"tags": ["neo-soul"], "swing": 0.45}, "bars": [{"bar": 1, "chord": "Am"}, {"bar": 2, "chord": "Am"}, {"bar": 3, "chord": "F"}, {"bar": 4, "chord": "F"}, {"bar": 5, "chord": "C"}, {"bar": 6, "chord": "C"}, {"bar": 7, "chord": "G"}, {"bar": 8, "chord": "G"}], "lanes": [{"tier": "low", "instrument": "bass_guitar", "locked": false, "source": "generated", "hash": "00885da2c5880c60592ced1a29565b879294560c3ba2267099567b4daf0ac5c4", "events": [{"beat": 0, "dur": 1.5, "midi": 33, "vel": 94}, {"beat": 1.575, "dur": 0.5, "midi": 33, "vel": 76}, {"beat": 2, "dur": 1.5, "midi": 40, "vel": 85}, {"beat": 3.575, "dur": 0.5, "midi": 34, "vel": 75}, {"beat": 4, "dur": 1.5, "midi": 33, "vel": 89}, {"beat": 5.575, "dur": 0.5, "midi": 33, "vel": 72}, {"beat": 6, "dur": 1.5, "midi": 40, "vel": 85}, {"beat": 7.575, "dur": 0.5, "midi": 42, "vel": 67}, {"beat": 8, "dur": 0.75, "midi": 41, "vel": 92}, {"beat": 9.575, "dur": 0.5, "midi": 41, "vel": 72}, {"beat": 10.575, "dur": 0.75, "midi": 36, "vel": 83}, {"beat": 11.25, "dur": 0.5, "midi": 42, "vel": 71}, {"beat": 12, "dur": 2.5, "midi": 41, "vel": 89}, {"beat": 15, "dur": 0.5, "midi": 36, "vel": 74}, {"beat": 15.575, "dur": 0.5, "midi": 35, "vel": 68}, {"beat": 16, "dur": 0.75, "midi": 36, "vel": 95}, {"beat": 17.575, "dur": 0.5, "midi": 36, "vel": 72}, {"beat": 18.575, "dur": 0.75, "midi": 43, "vel": 81}, {"beat": 19.25, "dur": 0.5, "midi": 37, "vel": 72}, {"beat": 20, "dur": 1.5, "midi": 36, "vel": 92}, {"beat": 21.575, "dur": 0.5, "midi": 36, "vel": 72}, {"beat": 22, "dur": 1.5, "midi": 43, "vel": 84}, {"beat": 23.575, "dur": 0.5, "midi": 32, "vel": 70}, {"beat": 24, "dur": 0.75, "midi": 31, "vel": 95}, {"beat": 25.575, "dur": 0.5, "midi": 31, "vel": 72}, {"beat": 26.575, "dur": 0.75, "midi": 38, "vel": 86}, {"beat": 27.25, "dur": 0.5, "midi": 32, "vel": 69}, {"beat": 28, "dur": 0.75, "midi": 31, "vel": 96}, {"beat": 29.575, "dur": 0.5, "midi": 31, "vel": 66}, {"beat": 30.575, "dur": 0.75, "midi": 38, "vel": 85}, {"beat": 31.25, "dur": 0.5, "midi": 34, "vel": 64}]}, {"tier": "mid", "instrument": "rhythm_guitar", "locked": false, "source": "generated", "hash": "2b283f7cfbd331ff851843418ba745697e8b9ec427c59284a3af1f8cc72a632e", "events": [{"beat": 0.0, "dur": 1.5, "midi": 57, "vel": 90}, {"beat": 0.012, "dur": 1.5, "midi": 60, "vel": 86}, {"beat": 0.024, "dur": 1.5, "midi": 64, "vel": 83}, {"beat": 1.575, "dur": 1, "midi": 64, "vel": 71}, {"beat": 1.587, "dur": 1, "midi": 60, "vel": 73}, {"beat": 1.599, "dur": 1, "midi": 57, "vel": 69}, {"beat": 2.575, "dur": 0.5, "midi": 64, "vel": 60}, {"beat": 2.587, "dur": 0.5, "midi": 60, "vel": 61}, {"beat": 2.599, "dur": 0.5, "midi": 57, "vel": 63}, {"beat": 3.0, "dur": 1, "midi": 57, "vel": 79}, {"beat": 3.012, "dur": 1, "midi": 60, "vel": 80}, {"beat": 3.024, "dur": 1, "midi": 64, "vel": 78}, {"beat": 4.0, "dur": 0.5, "midi": 57, "vel": 79}, {"beat": 4.012, "dur": 0.5, "midi": 60, "vel": 77}, {"beat": 4.024, "dur": 0.5, "midi": 64, "vel": 80}, {"beat": 5.575, "dur": 0.5, "midi": 64, "vel": 74}, {"beat": 5.587, "dur": 0.5, "midi": 60, "vel": 72}, {"beat": 5.599, "dur": 0.5, "midi": 57, "vel": 70}, {"beat": 6.575, "dur": 0.5, "midi": 64, "vel": 76}, {"beat": 6.587, "dur": 0.5, "midi": 60, "vel": 73}, {"beat": 6.599, "dur": 0.5, "midi": 57, "vel": 77}, {"beat": 7.575, "dur": 0.5, "midi": 64, "vel": 73}, {"beat": 7.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 7.599, "dur": 0.5, "midi": 57, "vel": 68}, {"beat": 8.0, "dur": 1.5, "midi": 57, "vel": 88}, {"beat": 8.012, "dur": 1.5, "midi": 60, "vel": 85}, {"beat": 8.024, "dur": 1.5, "midi": 65, "vel": 87}, {"beat": 9.575, "dur": 1, "midi": 65, "vel": 77}, {"beat": 9.587, "dur": 1, "midi": 60, "vel": 70}, {"beat": 9.599, "dur": 1, "midi": 57, "vel": 70}, {"beat": 10.575, "dur": 0.5, "midi": 65, "vel": 61}, {"beat": 10.587, "dur": 0.5, "midi": 60, "vel": 64}, {"beat": 10.599, "dur": 0.5, "midi": 57, "vel": 57}, {"beat": 11.0, "dur": 1, "midi": 57, "vel": 77}, {"beat": 11.012, "dur": 1, "midi": 60, "vel": 77}, {"beat": 11.024, "dur": 1, "midi": 65, "vel": 78}, {"beat": 12.0, "dur": 0.5, "midi": 57, "vel": 84}, {"beat": 12.012, "dur": 0.5, "midi": 60, "vel": 80}, {"beat": 12.024, "dur": 0.5, "midi": 65, "vel": 80}, {"beat": 13.575, "dur": 0.5, "midi": 65, "vel": 81}, {"beat": 13.587, "dur": 0.5, "midi": 60, "vel": 76}, {"beat": 13.599, "dur": 0.5, "midi": 57, "vel": 74}, {"beat": 14.575, "dur": 0.5, "midi": 65, "vel": 80}, {"beat": 14.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 14.599, "dur": 0.5, "midi": 57, "vel": 72}, {"beat": 15.575, "dur": 0.5, "midi": 65, "vel": 73}, {"beat": 15.587, "dur": 0.5, "midi": 60, "vel": 64}, {"beat": 15.599, "dur": 0.5, "midi": 57, "vel": 63}, {"beat": 16.0, "dur": 2, "midi": 55, "vel": 89}, {"beat": 16.012, "dur": 2, "midi": 60, "vel": 85}, {"beat": 16.024, "dur": 2, "midi": 64, "vel": 82}, {"beat": 18.0, "dur": 2, "midi": 55, "vel": 81}, {"beat": 18.012, "dur": 2, "midi": 60, "vel": 77}, {"beat": 18.024, "dur": 2, "midi": 64, "vel": 77}, {"beat": 20.0, "dur": 0.5, "midi": 55, "vel": 83}, {"beat": 20.012, "dur": 0.5, "midi": 60, "vel": 83}, {"beat": 20.024, "dur": 0.5, "midi": 64, "vel": 77}, {"beat": 21.575, "dur": 0.5, "midi": 64, "vel": 75}, {"beat": 21.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 21.599, "dur": 0.5, "midi": 55, "vel": 77}, {"beat": 22.575, "dur": 0.5, "midi": 64, "vel": 77}, {"beat": 22.587, "dur": 0.5, "midi": 60, "vel": 78}, {"beat": 22.599, "dur": 0.5, "midi": 55, "vel": 76}, {"beat": 23.575, "dur": 0.5, "midi": 64, "vel": 73}, {"beat": 23.587, "dur": 0.5, "midi": 60, "vel": 72}, {"beat": 23.599, "dur": 0.5, "midi": 55, "vel": 70}, {"beat": 24.0, "dur": 2, "midi": 55, "vel": 82}, {"beat": 24.012, "dur": 2, "midi": 59, "vel": 79}, {"beat": 24.024, "dur": 2, "midi": 62, "vel": 83}, {"beat": 26.0, "dur": 2, "midi": 55, "vel": 77}, {"beat": 26.012, "dur": 2, "midi": 59, "vel": 74}, {"beat": 26.024, "dur": 2, "midi": 62, "vel": 75}, {"beat": 28.0, "dur": 1.5, "midi": 55, "vel": 83}, {"beat": 28.012, "dur": 1.5, "midi": 59, "vel": 81}, {"beat": 28.024, "dur": 1.5, "midi": 62, "vel": 80}, {"beat": 29.575, "dur": 1, "midi": 62, "vel": 79}, {"beat": 29.587, "dur": 1, "midi": 59, "vel": 77}, {"beat": 29.599, "dur": 1, "midi": 55, "vel": 69}, {"beat": 30.575, "dur": 0.5, "midi": 62, "vel": 66}, {"beat": 30.587, "dur": 0.5, "midi": 59, "vel": 66}, {"beat": 30.599, "dur": 0.5, "midi": 55, "vel": 65}, {"beat": 31.0, "dur": 1, "midi": 55, "vel": 75}, {"beat": 31.012, "dur": 1, "midi": 59, "vel": 80}, {"beat": 31.024, "dur": 1, "midi": 62, "vel": 76}]}, {"tier": "high", "instrument": "cymbals", "locked": false, "source": "generated", "hash": "d53fa5b02c90a5818dc8502b38f981d12da7d6943111a51110525b46b1540bdd", "events": [{"beat": 0.0, "dur": 2.0, "midi": 49, "vel": 89}, {"beat": 0, "dur": 1, "midi": 51, "vel": 82}, {"beat": 1, "dur": 1, "midi": 51, "vel": 70}, {"beat": 1.575, "dur": 0.5, "midi": 51, "vel": 53}, {"beat": 2, "dur": 1, "midi": 51, "vel": 78}, {"beat": 3, "dur": 1, "midi": 51, "vel": 69}, {"beat": 3.575, "dur": 0.5, "midi": 51, "vel": 58}, {"beat": 4, "dur": 1, "midi": 51, "vel": 76}, {"beat": 5, "dur": 1, "midi": 51, "vel": 77}, {"beat": 5.575, "dur": 0.5, "midi": 51, "vel": 52}, {"beat": 6, "dur": 1, "midi": 51, "vel": 80}, {"beat": 7, "dur": 1, "midi": 51, "vel": 77}, {"beat": 7.575, "dur": 0.5, "midi": 51, "vel": 54}, {"beat": 8, "dur": 1, "midi": 51, "vel": 83}, {"beat": 9, "dur": 1, "midi": 51, "vel": 72}, {"beat": 9.575, "dur": 0.5, "midi": 51, "vel": 57}, {"beat": 10, "dur": 1, "midi": 51, "vel": 81}, {"beat": 11, "dur": 1, "midi": 51, "vel": 72}, {"beat": 11.575, "dur": 0.5, "midi": 51, "vel": 56}, {"beat": 12, "dur": 1, "midi": 51, "vel": 83}, {"beat": 13, "dur": 1, "midi": 51, "vel": 69}, {"beat": 13.575, "dur": 0.5, "midi": 51, "vel": 60}, {"beat": 14, "dur": 1, "midi": 51, "vel": 81}, {"beat": 15, "dur": 1, "midi": 51, "vel": 76}, {"beat": 15.575, "dur": 0.5, "midi": 51, "vel": 53}, {"beat": 16, "dur": 1, "midi": 51, "vel": 79}, {"beat": 17, "dur": 1, "midi": 51, "vel": 71}, {"beat": 17.575, "dur": 0.5, "midi": 51, "vel": 59}, {"beat": 18, "dur": 1, "midi": 51, "vel": 80}, {"beat": 19, "dur": 1, "midi": 51, "vel": 77}, {"beat": 19.575, "dur": 0.5, "midi": 51, "vel": 55}, {"beat": 20, "dur": 1, "midi": 51, "vel": 83}, {"beat": 21, "dur": 1, "midi": 51, "vel": 67}, {"beat": 21.575, "dur": 0.5, "midi": 51, "vel": 57}, {"beat": 22, "dur": 1, "midi": 51, "vel": 84}, {"beat": 23, "dur": 1, "midi": 51, "vel": 77}, {"beat": 23.575, "dur": 0.5, "midi": 51, "vel": 59}, {"beat": 24, "dur": 1, "midi": 51, "vel": 81}, {"beat": 25, "dur": 1, "midi": 51, "vel": 70}, {"beat": 25.575, "dur": 0.5, "midi": 51, "vel": 60}, {"beat": 26, "dur": 1, "midi": 51, "vel": 74}, {"beat": 27, "dur": 1, "midi": 51, "vel": 77}, {"beat": 27.575, "dur": 0.5, "midi": 51, "vel": 56}, {"beat": 28, "dur": 1, "midi": 51, "vel": 81}, {"beat": 29, "dur": 1, "midi": 51, "vel": 70}, {"beat": 29.575, "dur": 0.5, "midi": 51, "vel": 52}, {"beat": 30, "dur": 1, "midi": 51, "vel": 75}, {"beat": 31, "dur": 1, "midi": 51, "vel": 73}, {"beat": 31.575, "dur": 0.5, "midi": 51, "vel": 57}]}], "warnings": []}}};
 
     // =====================================================================
     // STATE MACHINE & CORE DEFINITIONS
@@ -754,7 +784,7 @@ E|---------------------------------------------------------5-3-0----|
 
     const initialState = {
       phase: 'ready', modalOpen: false, currentTake: 1, takes: [INITIAL_TAKE],
-      lockedTracks: ['bass'], bpm: 110, baseBpm: 110,
+      lockedTracks: ['bass'], bpm: 110, baseBpm: 110, groove: 'straight',
       speedTrainerActive: false, loopCount: 0, metronomeActive: true,
       muteTiers: { low: false, mid: false, high: false },
       ensemble: { low: 'bass_guitar', mid: 'rhythm_guitar', high: 'cymbals' },
@@ -767,13 +797,16 @@ E|---------------------------------------------------------5-3-0----|
           return s.phase === 'generating' ? s : { ...s, modalOpen: true, phase: 'modalOpen' };
         case 'CLOSE_MODAL':
           return { ...s, modalOpen: false, phase: s.takes.length ? 'ready' : 'idle' };
+        case 'SET_GROOVE':
+          return { ...s, groove: a.groove };
         case 'GENERATE_START':
           return { ...s, phase: 'generating', error: null };
         case 'GENERATE_SUCCESS': {
           const id = (s.takes.length ? s.takes[s.takes.length - 1].id : 0) + 1;
           const takes = [...s.takes, { id, payload: a.data }].slice(-MAX_TAKES);
           return { ...s, takes, currentTake: id, modalOpen: false, phase: 'ready',
-                   bpm: clampBpm(a.data.bpm), baseBpm: clampBpm(a.data.bpm), loopCount: 0 };
+                   bpm: clampBpm(a.data.bpm), baseBpm: clampBpm(a.data.bpm), loopCount: 0,
+                   groove: a.data.groove || s.groove || 'straight' };
         }
         case 'GENERATE_FAIL':
           return { ...s, phase: 'error', error: a.error };
@@ -1174,32 +1207,70 @@ E|---------------------------------------------------------5-3-0----|
         modalError.classList.add('hidden');
       }
 
-      // Active Take view rendering (Tab & Nashville chart)
+      // Active Take view rendering (Tab & Nashville chart & Groove)
       const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
-      if (activeTake && activeTake.payload) {
-        const payload = activeTake.payload;
-        if (payload.key) $('hud-key').innerText = payload.key;
-        if (payload.tab_score) {
-          $('view-tab').textContent = payload.tab_score;
+      const payload = (activeTake && activeTake.payload) || {};
+      const activeGroove = payload.groove || state.groove || 'straight';
+      if ($('hud-groove')) $('hud-groove').innerText = activeGroove;
+
+      // Sync groove pills & modal select
+      document.querySelectorAll('.groove-pill-btn').forEach(btn => {
+        const g = btn.dataset.groove;
+        const isCurrent = g === (state.groove || 'straight');
+        if (isCurrent) {
+          btn.className = 'groove-pill-btn rounded-lg border border-cyan-500 bg-cyan-500/20 text-cyan-300 px-2 py-1.5 font-bold transition flex items-center justify-center gap-1 cursor-pointer';
+        } else {
+          btn.className = 'groove-pill-btn rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500 px-2 py-1.5 transition flex items-center justify-center gap-1 cursor-pointer';
         }
-        if (payload.nashville_chart && payload.nashville_chart.length) {
-          const chords = payload.chords || [];
-          let cardsHtml = '';
-          payload.nashville_chart.forEach((num, idx) => {
-            const chordName = chords[idx] || '';
-            const barNum = `BAR ${idx * 2 + 1}-${idx * 2 + 2}`;
-            cardsHtml += `
-              <div class="border border-slate-800 bg-slate-900/50 p-4 rounded-xl">
-                <div class="text-xs text-slate-400">${barNum}</div>
-                <div class="text-3xl font-black text-amber-400 mt-1">${num}</div>
-                <div class="text-xs text-slate-400 mt-1">${chordName}</div>
-              </div>`;
-          });
-          $('view-nashville').innerHTML = `
-            <div class="text-center text-xs text-slate-400 mb-4 font-sans font-semibold">Key of ${payload.key} (Nashville Numbers: ${payload.nashville_chart.join(' - ')})</div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">${cardsHtml}</div>
-          `;
+      });
+      const grooveSelect = $('select-groove');
+      if (grooveSelect) grooveSelect.value = state.groove || 'straight';
+
+      // Update lane names and individual lane groove badges from part_scores
+      const laneMap = {
+        bass: { nameEl: $('lane-name-bass'), grooveEl: $('lane-groove-bass'), inst: state.ensemble.low, defaultLabel: 'Bass' },
+        lead: { nameEl: $('lane-name-lead'), grooveEl: $('lane-groove-lead'), inst: state.ensemble.mid, defaultLabel: 'Rhythm / Chords' },
+        drums: { nameEl: $('lane-name-drums'), grooveEl: $('lane-groove-drums'), inst: state.ensemble.high, defaultLabel: 'Drums / Percussion' },
+      };
+      const partScores = payload.part_scores || {};
+      Object.entries(laneMap).forEach(([laneKey, laneObj]) => {
+        const isLocked = state.lockedTracks.includes(laneKey);
+        const inst = laneObj.inst;
+        const part = inst && partScores[inst];
+        const laneGroove = (part && part.groove) || activeGroove;
+        if (laneObj.nameEl) {
+          const prettyInst = inst ? inst.replace(/_/g, ' ') : laneObj.defaultLabel;
+          laneObj.nameEl.innerText = `${prettyInst.charAt(0).toUpperCase() + prettyInst.slice(1)} (${laneKey.charAt(0).toUpperCase() + laneKey.slice(1)})`;
         }
+        if (laneObj.grooveEl) {
+          laneObj.grooveEl.innerText = isLocked ? `🔒 ${laneGroove}` : laneGroove;
+          laneObj.grooveEl.className = isLocked
+            ? 'text-[10px] bg-indigo-950/80 border border-indigo-700 text-indigo-300 px-1.5 py-0.5 rounded mono uppercase font-bold'
+            : 'text-[10px] bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded mono uppercase';
+        }
+      });
+
+      if (payload.key) $('hud-key').innerText = payload.key;
+      if (payload.tab_score) {
+        $('view-tab').textContent = payload.tab_score;
+      }
+      if (payload.nashville_chart && payload.nashville_chart.length) {
+        const chords = payload.chords || [];
+        let cardsHtml = '';
+        payload.nashville_chart.forEach((num, idx) => {
+          const chordName = chords[idx] || '';
+          const barNum = `BAR ${idx * 2 + 1}-${idx * 2 + 2}`;
+          cardsHtml += `
+            <div class="border border-slate-800 bg-slate-900/50 p-4 rounded-xl">
+              <div class="text-xs text-slate-400">${barNum}</div>
+              <div class="text-3xl font-black text-amber-400 mt-1">${num}</div>
+              <div class="text-xs text-slate-400 mt-1">${chordName}</div>
+            </div>`;
+        });
+        $('view-nashville').innerHTML = `
+          <div class="text-center text-xs text-slate-400 mb-4 font-sans font-semibold">Key of ${payload.key} (Nashville Numbers: ${payload.nashville_chart.join(' - ')})</div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">${cardsHtml}</div>
+        `;
       }
     }
 
@@ -1420,6 +1491,7 @@ E|---------------------------------------------------------5-3-0----|
         locked_parts: state.lockedTracks,
         seed: nextSeed,
         previous_score: prevScore,
+        groove: state.groove || 'straight',
       };
 
       dispatch({ type: 'GENERATE_START' });
@@ -1442,10 +1514,12 @@ E|---------------------------------------------------------5-3-0----|
         const newTakeData = {
           key: d.key || payload.key,
           bpm: d.bpm || payload.bpm,
+          groove: d.groove || payload.groove || 'straight',
           chords: d.chords || (payload.chords ? payload.chords.split(/[\s,|\-–—]+/).filter(Boolean) : []),
           nashville_chart: d.nashville_chart || [],
           tab_score: d.tab_score || '',
           stems: d.stems || [],
+          part_scores: d.part_scores || {},
           license_certificate: d.license_certificate || null,
           seed: d.seed || nextSeed,
           score: d.score || null,
@@ -1471,6 +1545,20 @@ E|---------------------------------------------------------5-3-0----|
         dispatch({ type: 'GENERATE_FAIL', error: { code: 'NETWORK', message: "Couldn't reach the band. Try again." } });
       }
     });
+
+    // Groove Preset listeners
+    document.querySelectorAll('.groove-pill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const groove = btn.dataset.groove;
+        dispatch({ type: 'SET_GROOVE', groove });
+      });
+    });
+    const selectGrooveEl = $('select-groove');
+    if (selectGrooveEl) {
+      selectGrooveEl.addEventListener('change', (e) => {
+        dispatch({ type: 'SET_GROOVE', groove: e.target.value });
+      });
+    }
 
     // Initialize View & Transport
     render();

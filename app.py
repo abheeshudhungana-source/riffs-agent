@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Literal, Optional, List, Dict, Any
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -53,6 +53,7 @@ class GenerateRequest(BaseModel):
     previous_score: Optional[Dict[str, Any]] = None
     base_take_id: Optional[int] = None
     issue_license: Optional[bool] = True
+    groove: Literal["straight", "half_time", "swing"] = "straight"
 
 
 ALLOWED_INSTRUMENTS = {
@@ -191,6 +192,7 @@ async def generate_riff(req: GenerateRequest):
             previous_score=req.previous_score,
             base_take_id=req.base_take_id,
             issue_license=True if req.issue_license is None else req.issue_license,
+            groove=req.groove,
         )
         return {
             "status": "success",

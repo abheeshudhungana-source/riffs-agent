@@ -20,42 +20,13 @@ CHROMATIC_SCALE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "
 FLAT_TO_SHARP = {"Db": "C#", "Eb": "D#", "Gb": "F#", "Ab": "G#", "Bb": "A#"}
 
 
-def _part_score_payload(instrument: str, score: Any) -> Dict[str, Any]:
+def _part_score_payload(instrument: str, score: Any, groove: str = "straight") -> Dict[str, Any]:
     """Serialize a deterministic symbolic lane and its MIDI bytes."""
     from riffs_api.exports import midi_bytes
-    from riffs_api.score import ScoreBar, ScoreDraft, ScoreNote
+    from riffs_api.score import draft_instrument_score, instrument_role, midi_channel_for_instrument
 
-    low_end = {"bass_guitar", "contrabass", "bass_drums", "floor_tom"}
-    high_end = {"cymbals", "triangle", "ukulele", "piccolo"}
-    octave_shift = -12 if instrument in low_end else 12 if instrument in high_end else 0
-    bars = tuple(
-        ScoreBar(
-            bar=bar.bar,
-            chord_symbol=bar.chord_symbol,
-            nashville=bar.nashville,
-            notes=tuple(
-                ScoreNote(
-                    pitch_midi=note.pitch_midi + octave_shift,
-                    onset_beats=note.onset_beats,
-                    duration_beats=note.duration_beats,
-                    velocity=note.velocity,
-                )
-                for note in bar.notes
-            ),
-        )
-        for bar in score.bars
-    )
-
-    lane_score = ScoreDraft(
-        key=score.key,
-        tempo_bpm=score.tempo_bpm,
-        time_signature=score.time_signature,
-        beats_per_bar=score.beats_per_bar,
-        chord_chart=score.chord_chart,
-        nashville_chart=score.nashville_chart,
-        bars=bars,
-    )
-    midi = midi_bytes(lane_score)
+    lane_score = draft_instrument_score(score, instrument, groove)
+    midi = midi_bytes(lane_score, channel=midi_channel_for_instrument(instrument))
     serialized_bars = [
         {
             "bar": bar.bar,
@@ -74,6 +45,8 @@ def _part_score_payload(instrument: str, score: Any) -> Dict[str, Any]:
     ]
     return {
         "instrument": instrument,
+        "role": instrument_role(instrument),
+        "groove": groove,
         "tempo_bpm": lane_score.tempo_bpm,
         "chord_chart": lane_score.chord_chart,
         "nashville_chart": lane_score.nashville_chart,
@@ -89,7 +62,7 @@ def _part_score_payload(instrument: str, score: Any) -> Dict[str, Any]:
 def _reuse_locked_part(instrument: str, previous: Dict[str, Any], score: Any) -> Dict[str, Any]:
     """Keep a lane's prior note vectors while writing MIDI at the current tempo."""
     from riffs_api.exports import midi_bytes
-    from riffs_api.score import ScoreBar, ScoreDraft, ScoreNote
+    from riffs_api.score import ScoreBar, ScoreDraft, ScoreNote, instrument_role, midi_channel_for_instrument
 
     bars = tuple(
         ScoreBar(
@@ -109,10 +82,12 @@ def _reuse_locked_part(instrument: str, previous: Dict[str, Any], score: Any) ->
         nashville_chart=previous.get("nashville_chart", score.nashville_chart),
         bars=bars,
     )
-    midi = midi_bytes(lane_score)
+    midi = midi_bytes(lane_score, channel=midi_channel_for_instrument(instrument))
     payload = dict(previous)
     payload.update({
         "instrument": instrument,
+        "role": instrument_role(instrument),
+        # A locked lane retains the groove that produced its saved note vectors.
         "tempo_bpm": lane_score.tempo_bpm,
         "midi_base64": base64.b64encode(midi).decode("ascii"),
         "midi_sha256": hashlib.sha256(midi).hexdigest(),
@@ -301,6 +276,7 @@ class RiffsAgent:
         previous_score: Optional[Dict[str, Any]] = None,
         base_take_id: Optional[int] = None,
         issue_license: bool = False,
+        groove: str = "straight",
     ) -> Dict[str, Any]:
         """
         Executes symbolic blueprint generation with part-locking.
@@ -343,11 +319,16 @@ class RiffsAgent:
         score = compose(
             parsed_chords, key, instruments, prompt=prompt, seed=seed,
             locked_parts=locked_parts, previous_score=previous_score,
+            groove=groove,
         )
 
         # Keep a deterministic symbolic representation beside the UI chart data.
         # A locked lane reuses its exact note vectors and refreshes global tempo metadata.
-        from riffs_api.score import draft_score
+        from riffs_api.score import SUPPORTED_GROOVES, draft_score
+
+        if groove not in SUPPORTED_GROOVES:
+            choices = ", ".join(SUPPORTED_GROOVES)
+            raise ValueError(f"Unsupported groove '{groove}'. Choose one of: {choices}.")
 
         symbolic_score = draft_score(chords, key, bpm)
         base_take = next(
@@ -363,7 +344,7 @@ class RiffsAgent:
             if lock_requested and prior_lane is not None:
                 lane_payload = _reuse_locked_part(inst, prior_lane, symbolic_score)
             else:
-                lane_payload = _part_score_payload(inst, symbolic_score)
+                lane_payload = _part_score_payload(inst, symbolic_score, groove)
             lane_payload["locked"] = bool(lock_requested)
             part_scores[inst] = lane_payload
 
@@ -375,6 +356,7 @@ class RiffsAgent:
             is_locked = _locked_part(inst, locked_parts)
             stems.append({
                 "lane": inst,
+                "role": part_scores.get(inst, {}).get("role"),
                 "filename": f"riff_{key}_{bpm}bpm_{safe_inst}.mid",
                 "locked": is_locked,
                 "available": True,
@@ -413,7 +395,7 @@ class RiffsAgent:
                     "Respond with pure valid JSON matching:\n"
                     '{"style_notes": "...", "groove_feel": "...", "dynamic_variation": "..."}'
                 )
-                user_msg = f"Key: {key}, BPM: {bpm}, Chords: {parsed_chords}, Instruments: {instruments}, Prompt: {prompt}"
+                user_msg = f"Key: {key}, BPM: {bpm}, Groove: {groove}, Chords: {parsed_chords}, Instruments: {instruments}, Prompt: {prompt}"
                 resp = litellm.completion(
                     model=self.model_id,
                     messages=[
@@ -434,6 +416,7 @@ class RiffsAgent:
         result_data = {
             "key": key,
             "bpm": bpm,
+            "groove": groove,
             "chords": parsed_chords,
             "nashville_chart": nashville_chart,
             "tab_score": tab_score,

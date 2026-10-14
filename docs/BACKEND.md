@@ -45,7 +45,7 @@ For the G major example, the ZIP contains `riff_Gmaj_110bpm.mid`, `riff_Gmaj_110
 
 ## Day 1 generation and locking
 
-The frontend uses `POST /api/generate`. It accepts `prompt`, `key`, `bpm`, `chords`, `instruments`, and `locked_parts`. The endpoint enforces the practice UI's 60–200 BPM range, validates the selected register tiers, and returns Nashville chart data plus per-lane symbolic notes and MIDI bytes.
+The frontend uses `POST /api/generate`. It accepts `prompt`, `key`, `bpm`, `chords`, `instruments`, `locked_parts`, and an optional `groove` preset. Supported grooves are `straight` (the default), `half_time`, and `swing`. The endpoint enforces the practice UI's 60–200 BPM range, validates the selected register tiers, and returns Nashville chart data plus per-lane symbolic notes and MIDI bytes.
 
 ```json
 {
@@ -54,15 +54,20 @@ The frontend uses `POST /api/generate`. It accepts `prompt`, `key`, `bpm`, `chor
   "bpm": 110,
   "chords": "Am - F - C - G",
   "instruments": ["bass_guitar", "rhythm_guitar", "cymbals"],
-  "locked_parts": ["bass_guitar"]
+  "locked_parts": ["bass_guitar"],
+  "groove": "swing"
 }
 ```
 
-Each successful response includes a monotonically increasing `take_id`, `part_scores`, and the compatibility `stems` field. Despite that legacy field name, each listed file is symbolic MIDI (`.mid`), not a rendered audio stem. `part_scores[instrument].midi_base64` contains its file, `midi_sha256` identifies the exact file bytes, and `note_vector_sha256` identifies the note data independently of tempo. When a lane is locked and was present in the previous take, the backend keeps its exact prior note vectors and updates the MIDI tempo metadata to match the new take. The latest five takes are kept in memory for the lifetime of the app process only.
+Each successful response includes a monotonically increasing `take_id`, the chosen top-level `groove`, `part_scores`, and the compatibility `stems` field. Each part score also reports its groove. Despite the legacy `stems` field name, each listed file is symbolic MIDI (`.mid`), not a rendered audio stem. `part_scores[instrument].midi_base64` contains its file, `midi_sha256` identifies the exact file bytes, and `note_vector_sha256` identifies the note data independently of tempo. When a lane is locked and was present in the previous take, the backend keeps its exact prior note vectors and reports the groove stored with that lane while refreshing MIDI tempo metadata. Swing note timing uses triplet subdivisions. The latest five takes are kept in memory for the lifetime of the app process only.
 
 The `license_certificate` response is explicitly marked `not_issued`. The current repo does not configure a licensed sample source, and neither the `/api/generate` route nor the frontend Save MP3 button produces WAV/MP3 audio. The versioned render route remains the supported way to download symbolic MIDI, MusicXML, and chord-chart exports.
 
-The score model currently uses one block chord per bar. It does not yet regenerate role-specific bass, percussion, or lead patterns from the style prompt. See [BACKEND_PRD_MAP.md](BACKEND_PRD_MAP.md) for the scope boundary and remaining PRD work.
+The versioned `/api/v1/scores/draft` and symbolic package export remain chord-first, with one block chord per bar. `/api/generate` now expands that chord draft into role-specific symbolic lanes, but does not yet derive variations from the style prompt. See [BACKEND_PRD_MAP.md](BACKEND_PRD_MAP.md) for the scope boundary and remaining PRD work.
+
+## Instrument role patterns
+
+`POST /api/generate` turns the chord draft into a deterministic note pattern for each selected lane. The explicit groove preset changes rhythmic density and timing for bass, chordal, melodic, and percussion roles. Bass lanes use root/fifth patterns, chordal instruments play stabs, melodic instruments use chord tones, and percussion lanes use General MIDI drum pitches on MIDI channel 10. Each `part_scores` entry and `stems` item includes its `role`; each part score also reports its groove. Freeform prompt text still does not select or alter the groove automatically.
 
 ## Prompt safety foundation
 
@@ -72,4 +77,4 @@ These checks are a deterministic ingress baseline, not a musical copyright detec
 
 ## Observable symbolic agent loop
 
-`POST /api/v1/agent/run` records each observation, state-based decision, action result, and post-action observation while parsing a progression, drafting a score, and exporting the symbolic package. A parse failure is observed as `parse_failed`; the policy then records a `request_clarification` action and ends in `awaiting_input`. The route caps the loop at five steps. Its policy is deterministic and does not use an LLM.
+`POST /api/v1/agent/run` records each observation, state-based decision, action result, and post-action observation while parsing a progression, drafting a score, and exporting the symbolic package. An optional prompt is checked before parsing; an unsafe request is observed as `unsafe_request`, then the policy records a `refuse` action and ends in `refused` without drafting. A parse failure is observed as `parse_failed`; the policy then records a `request_clarification` action and ends in `awaiting_input`. The route caps the loop at five steps. Its policy is deterministic and does not use an LLM.
