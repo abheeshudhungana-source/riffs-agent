@@ -6,12 +6,22 @@ import base64
 from typing import List, Dict, Any, Optional
 from composer import INSTRUMENT_TIER, compose
 from riffs_api.prompt_guardrails import validate_prompt
-# Load secrets from .env if dotenv is installed
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
+
+if not os.getenv("ANTHROPIC_API_KEY"):
+    env_file = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_file):
+        with open(env_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    if k.strip() == "ANTHROPIC_API_KEY":
+                        os.environ["ANTHROPIC_API_KEY"] = v.strip().strip("'").strip('"')
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
@@ -275,8 +285,8 @@ class RiffsAgent:
     """
     def __init__(self, model_id: str = "anthropic/claude-sonnet-5-5"):
         self.model_id = model_id
-        self.api_key = ANTHROPIC_API_KEY
-        self.max_tokens = 4096
+        self.api_key = os.getenv("ANTHROPIC_API_KEY") or ANTHROPIC_API_KEY
+        self.params = {"max_tokens": 4096}
         self.take_history: List[Dict[str, Any]] = []
         self._next_take_id = 1
 
@@ -430,7 +440,7 @@ class RiffsAgent:
                         {"role": "user", "content": user_msg}
                     ],
                     api_key=self.api_key,
-                    max_tokens=500
+                    **self.params
                 )
                 content = resp.choices[0].message.content
                 # Strip markdown code blocks if present
