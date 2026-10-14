@@ -252,6 +252,7 @@ async def generate_riff(req: GenerateRequest):
 class VocalApproveRequest(BaseModel):
     token: str
     lyrics_prompt: str
+    prompt: Optional[str] = "Accompaniment with lead vocal track"
     key: Optional[str] = "Am"
     bpm: Optional[int] = 110
     chords: Optional[str] = "Am - F - C - G"
@@ -267,7 +268,7 @@ class VocalApproveRequest(BaseModel):
 async def approve_vocal_track(req: VocalApproveRequest):
     try:
         data = RiffsAgent().generate(
-            prompt="Accompaniment with lead vocal track",
+            prompt=req.prompt or "Accompaniment with lead vocal track",
             key=req.key or "Am",
             bpm=req.bpm or 110,
             chords=req.chords or "Am - F - C - G",

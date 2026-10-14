@@ -210,7 +210,90 @@ class TestLyricsVocalHITL(unittest.TestCase):
         vocal_lanes = [l for l in d2["score"]["lanes"] if l["instrument"] == "vocal_lead"]
         self.assertEqual(len(vocal_lanes), 1)
 
+    def test_lyrics_strictly_limited_to_four_line_verse(self):
+        # 4-chord progression
+        res1 = self.agent.generate(
+            prompt="Neo-soul groove",
+            chords="Am - F - C - G",
+            lyrics_prompt="Reflections in the river",
+            vocal_approved=False,
+        )
+        self.assertEqual(len(res1["lyrics_draft"]["bars"]), 4, "Must be strictly 4 lines")
+
+        # 8-chord progression must also be strictly limited to a 4-line verse
+        res2 = self.agent.generate(
+            prompt="Neo-soul groove",
+            chords="Am - F - C - G - Dm - Am - E7 - Am",
+            lyrics_prompt="Reflections in the river",
+            vocal_approved=False,
+        )
+        self.assertEqual(len(res2["lyrics_draft"]["bars"]), 4, "8-chord progression must still limit verse to 4 lines")
+
+        # After approval, result must also be strictly 4 lines
+        token = res1["vocal_confirmation_token"]
+        approved = self.agent.generate(
+            prompt="Neo-soul groove",
+            chords="Am - F - C - G",
+            lyrics_prompt="Reflections in the river",
+            vocal_approved=True,
+            vocal_approval_token=token,
+        )
+        self.assertEqual(len(approved["lyrics"]), 4, "Approved lyrics must be strictly 4 lines")
+
+    def test_lyrics_match_instrumental_vibe_reggae(self):
+        res = self.agent.generate(
+            prompt="Roots reggae dub with one-drop bass",
+            chords="Am - G - F - G",
+            lyrics_prompt="Freedom and sunshine",
+            vocal_approved=False,
+        )
+        draft = res["lyrics_draft"]
+        self.assertEqual(draft["instrumental_vibe"], "reggae")
+        self.assertEqual(len(draft["bars"]), 4)
+        corpus = " ".join(b["text"].lower() for b in draft["bars"])
+        self.assertTrue(any(w in corpus for w in ["dub", "skank", "reggae", "one drop", "vibrations"]))
+
+    def test_lyrics_match_instrumental_vibe_blues(self):
+        res = self.agent.generate(
+            prompt="Gritty delta blues shuffle with dobro resonator",
+            chords="E7 - A7 - E7 - B7",
+            lyrics_prompt="Crossroads at dawn",
+            vocal_approved=False,
+        )
+        draft = res["lyrics_draft"]
+        self.assertEqual(draft["instrumental_vibe"], "blues")
+        self.assertEqual(len(draft["bars"]), 4)
+        corpus = " ".join(b["text"].lower() for b in draft["bars"])
+        self.assertTrue(any(w in corpus for w in ["resonator", "blues", "dust", "shuffle", "boots"]))
+
+    def test_lyrics_match_instrumental_vibe_neosoul(self):
+        res = self.agent.generate(
+            prompt="Smooth neo-soul groove with warm rhodes",
+            chords="Am7 - Dm7 - G7 - Cmaj7",
+            lyrics_prompt="Stargazing by the lake",
+            vocal_approved=False,
+        )
+        draft = res["lyrics_draft"]
+        self.assertEqual(draft["instrumental_vibe"], "neosoul")
+        self.assertEqual(len(draft["bars"]), 4)
+        corpus = " ".join(b["text"].lower() for b in draft["bars"])
+        self.assertTrue(any(w in corpus for w in ["rhodes", "velvet", "soul", "sunset"]))
+
+    def test_lyrics_match_instrumental_vibe_funk(self):
+        res = self.agent.generate(
+            prompt="Upbeat funk with slap bass pocket",
+            chords="E9 - A13 - E9 - B7",
+            lyrics_prompt="Get on the dancefloor",
+            vocal_approved=False,
+        )
+        draft = res["lyrics_draft"]
+        self.assertEqual(draft["instrumental_vibe"], "funk")
+        self.assertEqual(len(draft["bars"]), 4)
+        corpus = " ".join(b["text"].lower() for b in draft["bars"])
+        self.assertTrue(any(w in corpus for w in ["slap", "funk", "disco", "tight", "pocket"]))
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

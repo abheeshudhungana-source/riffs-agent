@@ -306,40 +306,189 @@ def parse_root_pitch_class(chord: str) -> int:
     return CHROMATIC_SCALE.index(root) if root in CHROMATIC_SCALE else 0
 
 
-LYRICS_TEMPLATES = {
-    "en": [
-        "Walking through the shadows in the midnight rain",
-        "Looking for a feeling that can ease this pain",
-        "Every little echo whispering your name",
-        "Chasing down the moments we can never claim",
-        "Neon lights are burning like a gentle fire",
-        "Climbing up the rhythm taking us up higher",
-        "Nothing left to lose and nothing to regret",
-        "Writing down the melody we won't forget",
-    ],
-    "es": [
-        "Caminando solo bajo la ciudad",
-        "Buscando en la noche nuestra libertad",
-        "Cada melodía suena con verdad",
-        "Llevo tu recuerdo en la oscuridad",
-        "Luces de colores brillan en el mar",
-        "Siento que este ritmo me va a transformar",
-        "Nada que perder y todo por ganar",
-        "Esta noche eterna vamos a cantar",
-    ],
-    "fr": [
-        "Dans la nuit profonde sous la pluie dorée",
-        "Je cherche la flamme qui m'a inspiré",
-        "Chaque douce note me fait espérer",
-        "Un nouveau voyage pour recommencer",
-    ],
-    "ja": [
-        "夜の街を歩きながら光を探す",
-        "静かな雨が心を満たしてゆく",
-        "重なるメロディが響き渡る",
-        "新しい朝に向かって走り出す",
-    ],
+def detect_instrumental_vibe(
+    instrumental_style: str = "",
+    groove: str = "straight",
+    instruments: Optional[List[str]] = None,
+) -> str:
+    """Classify the instrumental accompaniment into a musical vibe category."""
+    txt = (instrumental_style or "").lower()
+    insts = [i.lower() for i in (instruments or [])]
+
+    if any(k in txt for k in ["reggae", "dub", "ska", "island", "roots", "rasta"]) or (groove == "half_time" and "bass_guitar" in insts):
+        return "reggae"
+    if any(k in txt for k in ["blues", "rock", "gritty", "dobro", "resonator", "shuffle", "swamp", "dirt"]):
+        return "blues"
+    if any(k in txt for k in ["lo-fi", "lofi", "chill", "vinyl", "rain", "coffee", "bedroom", "tape"]):
+        return "lofi"
+    if any(k in txt for k in ["funk", "funky", "slap", "disco", "upbeat", "dance", "boogie"]):
+        return "funk"
+    if any(k in txt for k in ["soul", "neo-soul", "neosoul", "r&b", "rnb", "rhodes", "mellow", "velvet", "smooth"]):
+        return "neosoul"
+    return "general"
+
+
+VIBE_LYRICS_TEMPLATES = {
+    "reggae": {
+        "en": [
+            "Feel the heavy dub bass moving through the street",
+            "Skankin' with the rhythm put your soul to the test",
+            "Positive vibrations rising like the morning sun",
+            "One drop groove until the night is all done",
+        ],
+        "es": [
+            "Siente el bajo reggae latiendo en la ciudad",
+            "Con este ritmo suave buscando libertad",
+            "Vibraciones buenas que nunca se apagarán",
+            "Bajo el sol de la tarde todos cantarán",
+        ],
+        "fr": [
+            "Le son du dub résonne au cœur de la chaleur",
+            "Ce rythme reggae doux apaise ma douleur",
+            "Les vibrations profondes montent vers le ciel",
+            "Une lumière d'or douce comme le miel",
+        ],
+        "ja": [
+            "重いレゲエのベースが街に響いてる",
+            "ゆっくり揺れるリズムが夜を包み込む",
+            "静かな風に吹かれて自由を探して",
+            "明日へ向かうメロディが光り出す",
+        ],
+    },
+    "neosoul": {
+        "en": [
+            "Warm rhodes chords floating through the midnight rain",
+            "Velvet bass pocket running smooth without a care",
+            "Whispering your name through the golden sunset haze",
+            "Lost in the sweet embrace of neo-soul days",
+        ],
+        "es": [
+            "Acordes aterciopelados flotando en el café",
+            "Un bajo dulce y lento que no perderá la fe",
+            "La noche se detiene cuando suena tu voz",
+            "En este suave soul que nace entre los dos",
+        ],
+        "fr": [
+            "Des accords veloutés flottent dans la pénombre",
+            "La basse chante doucement et dissipe les ombres",
+            "Un parfum de soul tendre nous emporte ailleurs",
+            "Au creux de la musique s'apaise notre cœur",
+        ],
+        "ja": [
+            "甘いローズの響きが部屋に溶けてゆく",
+            "静かなベースが心をそっと揺らしてる",
+            "真夜中の空に囁く愛の言葉",
+            "重なるハーモニーが痛みを消してゆく",
+        ],
+    },
+    "blues": {
+        "en": [
+            "Dirty resonator screaming at the railroad track",
+            "Dust upon my boots and no way turning back",
+            "Shuffle in my stride under smoky crimson skies",
+            "Cold hard truth shining straight in your eyes",
+        ],
+        "es": [
+            "Cuerdas oxidadas lloran junto al ferrocarril",
+            "El polvo del camino quemando mi perfil",
+            "Un blues desgarrado que no sabe mentir",
+            "Bajo este cielo gris vuelvo a sonreír",
+        ],
+        "fr": [
+            "La vieille guitare pleure le long de la grand-route",
+            "Le vent du sud efface mes peurs et mes doutes",
+            "Ce blues rugueux avance d'un pas déterminé",
+            "Jusqu'au bout du chemin je vais continuer",
+        ],
+        "ja": [
+            "乾いたギターが荒野に響き渡る",
+            "埃まみれの道を一歩ずつ進む",
+            "心のブルースが激しく叫び出す",
+            "遠い地平線に夜明けが見えてくる",
+        ],
+    },
+    "lofi": {
+        "en": [
+            "Vinyl softly crackles by the rainy window sill",
+            "Muted tape loops keep the stormy weather still",
+            "Sipping black coffee while the mellow changes roll",
+            "A quiet gentle shelter for a wandering soul",
+        ],
+        "es": [
+            "Cruje el vinilo viejo junto al ventanal",
+            "Lluvia mansa cayendo en el frío cristal",
+            "Café negro y acordes que calman el dolor",
+            "Un lazo de cinta tejiendo su calor",
+        ],
+        "fr": [
+            "Le vinyle qui crépite sous la pluie du soir",
+            "Des accords feutrés au fond de la mémoire",
+            "Un café chaud fumant dans la petite chambre",
+            "Des souvenirs dorés comme des éclats d'ambre",
+        ],
+        "ja": [
+            "雨の降る窓辺でレコードが鳴っている",
+            "くぐもった音色が静けさを連れてくる",
+            "冷めかけたコーヒーと古いテープの音",
+            "懐かしい時間がゆっくり流れてゆく",
+        ],
+    },
+    "funk": {
+        "en": [
+            "Slap bass popping and the pocket is tight",
+            "Electric sparks flying through the disco light",
+            "Step into the groove let the rhythm take command",
+            "Nothing feels tighter than this powerhouse band",
+        ],
+        "es": [
+            "El bajo con slap marcando el compás",
+            "Chispas en la pista que no apagarás",
+            "Siente este funk que te hace vibrar",
+            "Nadie en la pista se va a quedar sin bailar",
+        ],
+        "fr": [
+            "La basse claque fort sur un tempo doré",
+            "La piste s'illumine sous le groove enflammé",
+            "Laisse le rythme funk guider tous tes pas",
+            "Rien n'est plus puissant que ce son d'ici-bas",
+        ],
+        "ja": [
+            "スラップベースが鋭く弾けて響く",
+            "フロアの熱気が夜空へと昇りゆく",
+            "ファンキーなビートに身を委ねながら",
+            "止まらないリズムと朝まで踊り続ける",
+        ],
+    },
+    "general": {
+        "en": [
+            "Walking through the shadows in the midnight rain",
+            "Looking for a feeling that can ease this pain",
+            "Every little echo whispering your name",
+            "Chasing down the moments we can never claim",
+        ],
+        "es": [
+            "Caminando solo bajo la ciudad",
+            "Buscando en la noche nuestra libertad",
+            "Cada melodía suena con verdad",
+            "Llevo tu recuerdo en la oscuridad",
+        ],
+        "fr": [
+            "Dans la nuit profonde sous la pluie dorée",
+            "Je cherche la flamme qui m'a inspiré",
+            "Chaque douce note me fait espérer",
+            "Un nouveau voyage pour recommencer",
+        ],
+        "ja": [
+            "夜の街を歩きながら光を探す",
+            "静かな雨が心を満たしてゆく",
+            "重なるメロディが響き渡る",
+            "新しい朝に向かって走り出す",
+        ],
+    },
 }
+
+# Backward compatibility alias
+LYRICS_TEMPLATES = VIBE_LYRICS_TEMPLATES["general"]
 
 
 def draft_bar_aligned_lyrics(
@@ -347,58 +496,99 @@ def draft_bar_aligned_lyrics(
     key: str,
     bpm: int,
     prompt: str,
+    instrumental_style: str = "",
+    groove: str = "straight",
+    instruments: Optional[List[str]] = None,
     language: str = "en",
     vocal_style: str = "soulful_lead",
     api_key: Optional[str] = None,
     model_id: str = "anthropic/claude-sonnet-5-5",
 ) -> Dict[str, Any]:
-    """Draft lyrics aligned bar-by-bar with chords matching language and vocal style."""
-    bars_count = max(4, len(chords))
+    """Draft exactly 4 bar-aligned lines of lyrics forming a verse that matches the instrumental vibe."""
+    vibe = detect_instrumental_vibe(instrumental_style, groove, instruments)
 
     if api_key and prompt:
         try:
             import litellm
+            vibe_label = instrumental_style or vibe
             sys_msg = (
-                f"You are a master lyricist and vocal arranger. Write {bars_count} bar-aligned lines of lyrics.\n"
-                f"Language: {language}.\nVocal Style: {vocal_style}.\n"
-                f"Chord Progression: {chords}.\nKey: {key}, BPM: {bpm}.\n"
+                f"You are a master lyricist and vocal arranger.\n"
+                f"TASK: Write exactly 4 bar-aligned lines of lyrics forming a tight, musical verse.\n"
+                f"MANDATORY REQUIREMENT: The lyrics of the song MUST match the vibe of the instrumentation.\n"
+                f"- Lyrics Prompt / Topic: {prompt}\n"
+                f"- Instrumental Vibe & Genre: {vibe_label}\n"
+                f"- Groove: {groove}, Tempo: {bpm} BPM, Key: {key}\n"
+                f"- Ensemble: {', '.join(instruments) if instruments else 'band'}\n"
+                f"- Language: {language}\n"
+                f"- Vocal Style: {vocal_style}\n"
+                f"- Chords (bars 1-4): {chords[:4]}\n"
+                "RHYME SCHEME: AABB or ABAB. Exactly 4 lines.\n"
                 "Return pure JSON with schema:\n"
-                '{"bars": [{"bar": 1, "chord": "...", "text": "...", "syllables": 7}, ...], "rhyme_scheme": "AABB", "theme": "..."}'
+                '{"bars": ['
+                f'  {{"bar": 1, "chord": "{chords[0]}", "text": "...", "syllables": 7}},'
+                f'  {{"bar": 2, "chord": "{chords[1 % len(chords)]}", "text": "...", "syllables": 7}},'
+                f'  {{"bar": 3, "chord": "{chords[2 % len(chords)]}", "text": "...", "syllables": 7}},'
+                f'  {{"bar": 4, "chord": "{chords[3 % len(chords)]}", "text": "...", "syllables": 7}}'
+                '], "rhyme_scheme": "AABB", "theme": "' + prompt + '", "instrumental_vibe": "' + vibe + '"}'
             )
             resp = litellm.completion(
                 model=model_id,
                 messages=[
                     {"role": "system", "content": sys_msg},
-                    {"role": "user", "content": f"Theme / Lyric Prompt: {prompt}"}
+                    {"role": "user", "content": f"Topic: {prompt}. Instrumental Vibe: {vibe_label}"}
                 ],
                 api_key=api_key,
-                max_tokens=1000
+                max_tokens=600
             )
             raw = resp.choices[0].message.content
             clean = re.sub(r"^```json\s*|\s*```$", "", raw.strip())
             data = json.loads(clean)
-            if "bars" in data and len(data["bars"]) >= len(chords):
-                for i, b in enumerate(data["bars"]):
+            if "bars" in data and len(data["bars"]) >= 4:
+                bars_out = []
+                for i, b in enumerate(data["bars"][:4]):
+                    b["bar"] = i + 1
                     b["chord"] = chords[i % len(chords)]
+                    bars_out.append(b)
+                data["bars"] = bars_out
                 data["language"] = language
                 data["vocal_style"] = vocal_style
+                data["instrumental_vibe"] = vibe
                 return data
         except Exception:
             pass
 
-    pool = LYRICS_TEMPLATES.get(language, LYRICS_TEMPLATES["en"])
-    bars = []
-    for i in range(bars_count):
-        chord = chords[i % len(chords)]
-        line = pool[i % len(pool)]
-        if i == 0 and prompt and len(prompt.split()) <= 6:
-            suffix_map = {
-                "en": " in the night",
-                "es": " en la noche",
-                "fr": " dans la nuit",
-                "ja": " 夜の彼方へ",
+    # Deterministic Vibe-Matched Fallback Templates
+    vibe_dict = VIBE_LYRICS_TEMPLATES.get(vibe, VIBE_LYRICS_TEMPLATES["general"])
+    pool = vibe_dict.get(language, vibe_dict.get("en", VIBE_LYRICS_TEMPLATES["general"]["en"]))
+    verse_lines = list(pool[:4])
+
+    cleaned_prompt = (prompt or "").strip()
+    if cleaned_prompt:
+        if language == "en":
+            vibe_connectors = {
+                "reggae": " with that heavy dub sound",
+                "neosoul": " under warm velvet lights",
+                "blues": " where the crying dobro weeps",
+                "lofi": " as the vinyl loops spin",
+                "funk": " stepping to that driving beat",
+                "general": " in the midnight rain",
             }
-            line = f"{prompt.capitalize()}{suffix_map.get(language, ' in the night')}"
+            conn = vibe_connectors.get(vibe, " in the night")
+            if len(cleaned_prompt.split()) <= 6:
+                verse_lines[0] = f"{cleaned_prompt.capitalize()}{conn}"
+            else:
+                verse_lines[0] = cleaned_prompt.capitalize()
+        elif language == "es":
+            verse_lines[0] = f"{cleaned_prompt.capitalize()} en la noche"
+        elif language == "fr":
+            verse_lines[0] = f"{cleaned_prompt.capitalize()} dans la nuit"
+        elif language == "ja":
+            verse_lines[0] = f"{cleaned_prompt} 夜の彼方へ"
+
+    bars = []
+    for i in range(4):
+        chord = chords[i % len(chords)]
+        line = verse_lines[i]
         syllables = len(re.findall(r"[aeiouy]+", line.lower())) or 7
         bars.append({
             "bar": i + 1,
@@ -411,8 +601,9 @@ def draft_bar_aligned_lyrics(
         "bars": bars,
         "language": language,
         "vocal_style": vocal_style,
-        "rhyme_scheme": "AABB" if bars_count == 4 else "AABBCCDD",
+        "rhyme_scheme": "AABB",
         "theme": prompt or "Melodic sketch",
+        "instrumental_vibe": vibe,
     }
 
 
@@ -645,6 +836,9 @@ class RiffsAgent:
                     key=key,
                     bpm=bpm,
                     prompt=lyrics_prompt,
+                    instrumental_style=prompt,
+                    groove=groove,
+                    instruments=instruments,
                     language=lyrics_language,
                     vocal_style=vocal_style,
                     api_key=self.api_key,
@@ -683,29 +877,32 @@ class RiffsAgent:
 
             if edited_lyrics:
                 norm_lyrics = []
-                for idx, item in enumerate(edited_lyrics):
+                for idx, item in enumerate(edited_lyrics[:4]):
                     c = parsed_chords[idx % len(parsed_chords)]
                     if isinstance(item, str):
                         norm_lyrics.append({"bar": idx + 1, "chord": c, "text": item})
                     elif isinstance(item, dict):
                         text = item.get("text") or item.get("lyric") or ""
                         norm_lyrics.append({
-                            "bar": item.get("bar", idx + 1),
+                            "bar": idx + 1,
                             "chord": item.get("chord") or c,
                             "text": text,
                         })
-                final_lyrics = norm_lyrics
+                final_lyrics = norm_lyrics[:4]
             else:
                 final_lyrics = draft_bar_aligned_lyrics(
                     chords=parsed_chords,
                     key=key,
                     bpm=bpm,
                     prompt=lyrics_prompt,
+                    instrumental_style=prompt,
+                    groove=groove,
+                    instruments=instruments,
                     language=lyrics_language,
                     vocal_style=vocal_style,
                     api_key=self.api_key,
                     model_id=self.model_id,
-                ).get("bars", [])
+                ).get("bars", [])[:4]
 
             vocal_events = _generate_vocal_melody_events(parsed_chords, key, final_lyrics, seed)
             vocal_lane = {

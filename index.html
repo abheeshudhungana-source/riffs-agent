@@ -515,16 +515,16 @@ E|---------------------------------------------------------5-3-0----|
             <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
             🛡️ Human-in-the-Loop Vocal Checkpoint
           </span>
-          <span class="text-[10px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded font-mono">Token Verified</span>
+          <span class="text-[10px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded font-mono">4-Line Verse • Vibe-Matched</span>
         </div>
-        <p class="text-xs text-slate-300 mt-1.5">Review and edit the lyrics draft before authorizing voice synthesis:</p>
+        <p class="text-xs text-slate-300 mt-1.5">Review and edit the 4-line verse drafted to match the groove and instrumental vibe:</p>
         
         <div id="checkpoint-lyrics-preview" class="mt-2.5 max-h-36 overflow-y-auto rounded-lg bg-slate-950/80 p-3 text-xs space-y-1.5 font-mono border border-slate-800 text-slate-200">
           <!-- Populated dynamically with bar-by-bar lyrics -->
         </div>
 
-        <label for="checkpoint-lyrics-edit" class="block text-[11px] font-semibold text-slate-400 mt-2.5">Edit Lyrics Lines (one line per bar)</label>
-        <textarea id="checkpoint-lyrics-edit" rows="3" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400"></textarea>
+        <label for="checkpoint-lyrics-edit" class="block text-[11px] font-semibold text-slate-400 mt-2.5">Edit 4-Line Verse (exactly 4 lines, one line per bar)</label>
+        <textarea id="checkpoint-lyrics-edit" rows="4" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400"></textarea>
 
         <div class="mt-3 flex items-center justify-end gap-2">
           <button id="btn-cancel-vocals" type="button" class="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200">Keep Instrumental</button>
@@ -1933,6 +1933,7 @@ E|---------------------------------------------------------5-3-0----|
         try {
           const approvePayload = {
             token: token,
+            prompt: payload.prompt || (takeData && takeData.prompt) || 'Accompaniment with lead vocal track',
             lyrics_prompt: takeData.lyrics_prompt || payload.lyrics_prompt || 'Vocal song sketch',
             key: takeData.key || payload.key || 'Am',
             bpm: takeData.bpm || payload.bpm || 110,
