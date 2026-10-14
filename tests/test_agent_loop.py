@@ -23,9 +23,13 @@ class TestAgentLoop(unittest.TestCase):
                 "riff_Gmaj_110bpm.mid",
                 "riff_Gmaj_110bpm.musicxml",
                 "riff_Gmaj_110bpm_chord_chart.json",
+                "riff_Gmaj_110bpm_bass_guitar.mid",
+                "riff_Gmaj_110bpm_rhythm_guitar.mid",
+                "riff_Gmaj_110bpm_drum_kit.mid",
+                "riff_Gmaj_110bpm_preview.wav",
             ],
         )
-        self.assertFalse(history[2]["state_after"]["export"]["audio_rendered"])
+        self.assertTrue(history[2]["state_after"]["export"]["audio_rendered"])
 
     def test_api_runs_loop_and_returns_observations_after_each_action(self):
         body = run_agent_loop_endpoint(AgentLoopRequest(

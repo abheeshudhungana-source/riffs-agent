@@ -72,7 +72,7 @@ class TestDay3VideoRemuxTool(unittest.TestCase):
 
 
 class TestDay3DigitalLicenseCertificate(unittest.TestCase):
-    def test_issue_license_certificate_contains_verifiable_hash_and_terms(self):
+    def test_provenance_record_hashes_artifacts_without_granting_rights(self):
         agent = RiffsAgent()
         res = agent.generate(
             prompt="Neo soul pocket groove",
@@ -82,10 +82,10 @@ class TestDay3DigitalLicenseCertificate(unittest.TestCase):
             issue_license=True,
         )
         cert = res["license_certificate"]
-        self.assertEqual(cert["status"], "issued")
-        self.assertTrue(cert["license_id"].startswith("RIFFS-LIC-"))
-        self.assertEqual(cert["issuer"], "RIFFs Autonomous Licensing Authority")
-        self.assertIn("Royalty-Free", cert["terms"])
+        self.assertEqual(cert["status"], "provenance_only")
+        self.assertIsNone(cert["license_id"])
+        self.assertFalse(cert["rights_grant"])
+        self.assertIn("not a license", cert["notice"])
         self.assertTrue(len(cert["hash_sha256"]) == 64)
 
 

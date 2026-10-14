@@ -186,9 +186,9 @@ class InstrumentRoleTests(unittest.TestCase):
             instruments=["bass_guitar", "rhythm_guitar"],
             groove="straight",
         )
-        self.assertEqual(take["groove"], "half_time")
-        self.assertEqual(take["part_scores"]["bass_guitar"]["groove"], "half_time")
-        self.assertEqual(take["part_scores"]["rhythm_guitar"]["groove"], "half_time")
+        self.assertEqual(take["groove"], "half_time_shuffle")
+        self.assertEqual(take["part_scores"]["bass_guitar"]["groove"], "half_time_shuffle")
+        self.assertEqual(take["part_scores"]["rhythm_guitar"]["groove"], "half_time_shuffle")
 
         # Explicit non-straight groove overrides prompt feel
         take_explicit = agent.generate(
