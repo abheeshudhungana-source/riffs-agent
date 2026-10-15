@@ -124,7 +124,7 @@ def increment_generation_count(user: str, now: float | None = None) -> int:
         redis_client = storage.get_redis()
         return int(redis_client.eval(_RATE_LIMIT_SCRIPT, 1, key, RATE_WINDOW_SECONDS))
     except Exception as exc:
-        if not os.getenv("REDIS_URL"):
+        if not os.getenv("REDIS_URL") or not os.getenv("RIFFS_REQUIRE_REDIS"):
             prev_window, count = _IN_MEMORY_RATE_LIMITS.get(user_key, (window, 0))
             if prev_window != window:
                 count = 1
