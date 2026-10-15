@@ -17,6 +17,7 @@
 * **Role:** Autonomous Music Theory & Acoustic Sketching Co-Producer.
 * **Industry:** Music Technology, Songwriting Tools, and Musician Practice & Education.
 * **Target Users:** Working musicians, songwriters, educators, and instrumentalists who need an interactive, editable practice band that respects the craft of music theory.
+* **The Problem Solved:** Songwriters and practicing musicians currently face an unappealing binary choice: static, mechanical chord backing apps (e.g. iReal Pro) that cannot compose new parts or generate lyrical concepts, or black-box generative AI audio tools (e.g. Suno, Udio) that spit out flattened, uneditable audio waveforms with no chord charts, no guitar tabs, and no stems. RIFFs bridges this gap as an autonomous co-producer that outputs structured, multi-track symbolic scores that musicians can learn, transpose, edit, and play along with in real time.
 * **Core Philosophy:** **"The Recipe Before the Cake"** — Symbolic musical notation (Nashville Numbers, Guitar Tablature, Multi-track MIDI) is composed and verified *first*, and subsequently rendered into authentic acoustic sound. Unlike black-box audio diffusion models, every single note, chord degree, and lyric event remains 100% inspectable, editable, and lockable.
 
 ---
@@ -99,17 +100,22 @@ Being transparent about architectural boundaries is critical for production read
 
 ## 🛠️ How to Run It
 
+> [!NOTE]
+> **Zero API Keys Required for Full Operation:** The agent runs 100% out-of-the-box using its deterministic music theory, chord parsing, tab generation, and Web Audio DSP engine. Providing an `ANTHROPIC_API_KEY` is completely optional and only used for natural language style enrichment.
+> 
+> **Zero Build Steps:** There are no Node.js or `npm` build requirements. The frontend is vanilla HTML/CSS/Web Audio served directly by FastAPI.
+
 ### Option A: Live Web Application (Instant)
-Access the live production deployment directly in any modern browser:  
+Access the live production deployment directly in any modern desktop or mobile browser:  
 👉 **[https://riffs-agent.vercel.app](https://riffs-agent.vercel.app)**
 
 ### Option B: Local Web Server
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/abheeshudhungana-source/riffs-agent.git
-   cd riffs_agent
+   cd riffs-agent
    ```
-2. **Create a virtual environment and install dependencies:**
+2. **Create a virtual environment and install dependencies (Python 3.9+):**
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
@@ -118,7 +124,7 @@ Access the live production deployment directly in any modern browser:
 3. **Configure environment variables (optional):**
    ```bash
    cp .env.example .env
-   # Add ANTHROPIC_API_KEY if you want Claude-powered style enrichment
+   # ANTHROPIC_API_KEY is OPTIONAL. If omitted, the agent uses its built-in rule heuristics.
    ```
 4. **Start the FastAPI server:**
    ```bash
@@ -131,6 +137,32 @@ Run the autonomous loop harness directly from your terminal:
 ```bash
 python riff_session.py
 ```
+*(Optional: Install `ffmpeg` via Homebrew or apt if you plan to use headless video audio replacement tools).*
+
+---
+
+### ⚡ 2-Minute Quickstart Test Drive
+
+Follow these 4 steps to test the full agent loop, safety guardrails, and music theory engine:
+
+1. **Step 1: Seed the Instrumental Band & Lyrics Prompts**
+   * **Prompt 1 (Instrumental):** Enter `Am - F - C - G`, set tempo to `110 BPM`, and genre style: `"Neo-soul pocket with driving bass"`.
+   * **Prompt 2 (Lyrics & Voice):** Enter Theme: `"Midnight highway rain"`, Vocal Style: `Soulful Lead`, Language: `English`.
+   * Click **Generate Riff Take**.
+
+2. **Step 2: Test the Human-in-the-Loop (HITL) Vocal Checkpoint**
+   * Notice that the agent pauses before synthesizing vocal audio and presents an **"Awaiting Vocal Approval"** modal containing an expiring cryptographic HMAC token.
+   * Edit Line 2 directly in the modal (e.g. adjust the rhyme or wording) and click **Approve Vocal Take**.
+   * Observe the verified token convert into an active vocal lead track with synchronized Web Speech narration.
+
+3. **Step 3: Test Non-Destructive Track Locking & Practice Suite**
+   * In the track mixer deck, click the 🔒 lock button on the **Bass** track.
+   * Click **Re-roll Take**—the chords, tabs, drums, and lyrics regenerate while your locked bassline remains completely untouched.
+   * Toggle the **Speed Trainer** (+3 BPM per loop) or hardware LED Mute switches to test real-time DSP practice controls.
+
+4. **Step 4: Test Safety & Originality Guardrails**
+   * Enter: `"Write me a complete 3-minute radio pop song like Ed Sheeran"`.
+   * Verify the agent cleanly rejects the prompt with a helpful explanation referencing `LOOP_LENGTH_LIMIT` (sketching loopers only) and anti-cloning copyright policies.
 
 ---
 
