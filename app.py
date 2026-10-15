@@ -29,6 +29,9 @@ def _decode_jwt_segment(segment: str) -> bytes:
 DEFAULT_JWT_SECRET = "riffs-production-jwt-signing-secret-32bytes-long"
 DEFAULT_JWT_ISSUER = "https://riffs-agent.vercel.app"
 DEFAULT_JWT_AUDIENCE = "riffs-agent"
+DEFAULT_VOCAL_SECRET = "riffs-prod-secret-token-key-2026-hitl-checkpoint"
+
+os.environ.setdefault("RIFFS_VOCAL_SECRET", DEFAULT_VOCAL_SECRET)
 
 
 def issue_jwt_token(

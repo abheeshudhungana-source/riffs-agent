@@ -410,6 +410,12 @@ class TestLyricsVocalHITL(unittest.TestCase):
             self.assertEqual(c1, 1)
             self.assertEqual(c2, 2)
 
+    def test_default_vocal_secret_configured(self):
+        from app import DEFAULT_VOCAL_SECRET
+        self.assertGreaterEqual(len(DEFAULT_VOCAL_SECRET.encode("utf-8")), 32)
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(os.getenv("RIFFS_VOCAL_SECRET", DEFAULT_VOCAL_SECRET), DEFAULT_VOCAL_SECRET)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -504,7 +504,16 @@ def verify_and_consume_vocal_token(
             "Explicit acknowledgment required: rights are unassessed and no copyright clearance is granted.",
         )
 
-    store = token_store or get_token_store()
+    store = token_store
+    if store is None:
+        try:
+            store = get_token_store()
+        except Exception as e:
+            if not (os.getenv("KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL")):
+                from riffs_api.token_store import _memory_store
+                store = _memory_store
+            else:
+                raise e
     if not store.consume_token(claims["jti"], claims["exp"]):
         _fail("TOKEN_REPLAYED", "Vocal approval token has already been used.")
 
@@ -902,6 +911,7 @@ class RiffsAgent:
         lyrics_draft: Optional[List[Dict[str, Any]]] = None,
         vocal_trace_id: Optional[str] = None,
         acknowledge_unassessed_rights: bool = False,
+        token_store: Any = None,
     ) -> Dict[str, Any]:
         """
         Executes symbolic blueprint generation with part-locking and optional lyrics.
@@ -1254,6 +1264,7 @@ class RiffsAgent:
                 current_rights_status=rights_status,
                 acknowledge_unassessed_rights=acknowledge_unassessed_rights,
                 trace_id=vocal_trace_id,
+                token_store=token_store,
             )
 
             vocal_locked = _locked_part("vocal_lead", locked_parts) or _locked_part("vocal", locked_parts)
