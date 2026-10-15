@@ -84,3 +84,18 @@ These checks are a deterministic ingress baseline. The optional local contour ma
 ## Observable symbolic agent loop
 
 `POST /api/v1/agent/run` records each observation, state-based decision, action result, and post-action observation while parsing a progression, drafting a score, and exporting the symbolic package. An optional prompt is checked before parsing; an unsafe request is observed as `unsafe_request`, then the policy records a `refuse` action and ends in `refused` without drafting. A parse failure is observed as `parse_failed`; the policy then records a `request_clarification` action and ends in `awaiting_input`. The route caps the loop at five steps. Its policy is deterministic and does not use an LLM.
+
+## Day 6: Least-privilege tool access control & session storage isolation
+
+The tool gateway (`riffs_api/tool_access.py`) enforces strict least privilege across all agent tool executions:
+- **Least-Privilege Allowlist (`ALLOWED_TOOLS`)**:
+  - **Read-Only**: `search_docs`, `parse_progression`, `users_lookup`, and `inspect_take_history` are restricted to `access: "read"`; any attempt to execute with `action="write"` raises `PermissionError`.
+  - **Safe Internal Write**: `draft_score`, `session_chat`, `archive_take` (soft-delete to recoverable trash), and `export_symbolic` execute without human friction.
+  - **High-Blast / External Write**: `export_symbolic_package`, `approve_vocal_lead`, `remux_video`, and `send_collab_invite` require explicit human-in-the-loop approval (`require_approval: True`), failing closed if `approved=True` is not provided.
+  - **Revoked & Denied**: Destructive actions (`session_delete`, `storage_delete`) and zombie prototype permissions (`playlist_modify`, `playlist_read`, `analytics_read`) are excluded from the allowlist and raise `PermissionError` by default.
+- **Per-Session Path Scoping (`validate_session_storage_path`)**:
+  - Storage read and write actions are deterministically constrained to `audio/sessions/{session_id}/*`.
+  - Path traversal (`..`) and sibling prefix matches (e.g. `audio/sessions/{session_id}_other/`) are rejected with `PermissionError`.
+- **Runtime Enforcement**:
+  - The observable agent loop (`riffs_api/agent_loop.py`) routes all step actions through `call_tool()`, ensuring all actions pass through the authorization boundary.
+

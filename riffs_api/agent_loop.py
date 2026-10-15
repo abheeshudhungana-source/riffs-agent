@@ -12,6 +12,7 @@ from riffs_api.prompt_guardrails import PromptRefusal, validate_prompt
 from riffs_api.render import render_symbolic_package, symbolic_package_filename
 from riffs_api.prompt_intent import resolve_groove
 from riffs_api.score import SUPPORTED_INSTRUMENTS, draft_instrument_score, draft_score
+from riffs_api.tool_access import ALLOWED_TOOLS, call_tool
 
 
 class RiffBuildEnvironment:
@@ -70,58 +71,47 @@ class RiffBuildEnvironment:
         """Execute one allowlisted action and return its result."""
         del args  # Actions currently derive their inputs from observed environment state.
         try:
+            if action not in ALLOWED_TOOLS:
+                raise PermissionError(f"Action '{action}' is not allowed.")
+
             if action == "parse_progression":
-                parsed = parse_progression(self.progression, self.key)
-                self.parsed = {
-                    "key": parsed.key,
-                    "chord_chart": parsed.chord_chart,
-                    "nashville_chart": parsed.nashville_chart,
-                    "chords": [asdict(chord) for chord in parsed.chords],
-                }
+                parsed = call_tool("parse_progression", "read", progression=self.progression, key=self.key)
+                self.parsed = parsed
                 self.status = "parsed"
-                return {"ok": True, "action": action, "chord_chart": parsed.chord_chart}
+                return {"ok": True, "action": action, "chord_chart": parsed["chord_chart"]}
 
             if action == "draft_score":
                 if self.parsed is None:
                     raise ValueError("Parse the progression before drafting a score.")
-                score = draft_score(self.progression, self.key, self.tempo_bpm)
-                lanes = {
-                    instrument: asdict(draft_instrument_score(score, instrument, self.groove))
-                    for instrument in self.instruments
-                }
-                self.score = {**asdict(score), "groove": self.groove, "parts": lanes}
+                score_data = call_tool(
+                    "draft_score", "write",
+                    progression=self.progression, key=self.key, tempo_bpm=self.tempo_bpm,
+                    groove=self.groove, instruments=self.instruments,
+                )
+                self.score = score_data
                 self.status = "scored"
                 return {
                     "ok": True,
                     "action": action,
-                    "bar_count": len(score.bars),
-                    "time_signature": score.time_signature,
+                    "bar_count": len(score_data["bars"]),
+                    "time_signature": score_data["time_signature"],
                 }
 
             if action == "export_symbolic":
                 if self.score is None:
                     raise ValueError("Draft a score before exporting it.")
-                archive = render_symbolic_package(
-                    self.progression, self.key, self.tempo_bpm,
+                export_data = call_tool(
+                    "export_symbolic", "write",
+                    progression=self.progression, key=self.key, tempo_bpm=self.tempo_bpm,
                     prompt=self.prompt, groove=self.groove, instruments=self.instruments,
                 )
-                with ZipFile(BytesIO(archive)) as package:
-                    filenames = package.namelist()
-                self.export = {
-                    "filename": symbolic_package_filename(self.key, self.tempo_bpm),
-                    "files": filenames,
-                    "size_bytes": len(archive),
-                    "audio_rendered": True,
-                    "audio_status": "synthetic_preview",
-                    "license_certificate_issued": False,
-                    "license_status": "not_issued",
-                }
+                self.export = export_data
                 self.status = "completed"
                 return {"ok": True, "action": action, **self.export}
 
-            raise ValueError(f"Action '{action}' is not allowed.")
-        except (ProgressionError, ValueError) as exc:
-            self.status = "parse_failed" if action == "parse_progression" else "failed"
+            raise PermissionError(f"Action '{action}' is not allowed.")
+        except (ProgressionError, ValueError, PermissionError) as exc:
+            self.status = "parse_failed" if action == "parse_progression" and not isinstance(exc, PermissionError) else "failed"
             self.error = str(exc)
             return {"ok": False, "action": action, "error": self.error}
 
