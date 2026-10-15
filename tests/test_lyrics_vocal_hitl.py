@@ -119,6 +119,67 @@ class TestLyricsVocalHITL(unittest.TestCase):
             with self.assertRaises(VocalApprovalUnavailable):
                 consume_vocal_token(token, context, lyrics)
 
+    def test_replay_store_fails_closed_without_shared_storage_when_deployed(self):
+        from agent import generate_vocal_token, verify_and_consume_vocal_token
+        from riffs_api.token_store import TokenStoreUnavailable, get_token_store, set_token_store
+
+        set_token_store(None)
+        deployment_markers = (
+            {"VERCEL": "1"},
+            {"VERCEL_ENV": "preview"},
+            {"AWS_LAMBDA_FUNCTION_NAME": "riffs-api"},
+            {"ENVIRONMENT": "production"},
+        )
+        for marker in deployment_markers:
+            with self.subTest(marker=marker), patch.dict(os.environ, {
+                "VERCEL": "",
+                "VERCEL_ENV": "",
+                "AWS_LAMBDA_FUNCTION_NAME": "",
+                "ENVIRONMENT": "",
+                "KV_REST_API_URL": "",
+                "KV_REST_API_TOKEN": "",
+                "UPSTASH_REDIS_REST_URL": "",
+                "UPSTASH_REDIS_REST_TOKEN": "",
+                **marker,
+            }):
+                with self.assertRaises(TokenStoreUnavailable):
+                    get_token_store()
+
+        # Exercise the real approval path too: it must not catch the factory's
+        # deployed-environment error and silently accept a token in process memory.
+        set_token_store(None)
+        context = {"trace_id": "deployed-no-kv"}
+        lyrics = [{"bar": 1, "chord": "Am", "text": "line"}]
+        token = generate_vocal_token(lyrics, context, "clean")
+        with patch.dict(os.environ, {
+            "VERCEL": "1",
+            "VERCEL_ENV": "preview",
+            "AWS_LAMBDA_FUNCTION_NAME": "",
+            "ENVIRONMENT": "",
+            "KV_REST_API_URL": "",
+            "KV_REST_API_TOKEN": "",
+            "UPSTASH_REDIS_REST_URL": "",
+            "UPSTASH_REDIS_REST_TOKEN": "",
+        }), patch("agent.record_audit_event"):
+            with self.assertRaises(TokenStoreUnavailable):
+                verify_and_consume_vocal_token(token, lyrics, context, "clean")
+
+    def test_replay_store_uses_memory_only_outside_deployments(self):
+        from riffs_api.token_store import MemoryTokenStore, get_token_store, set_token_store
+
+        set_token_store(None)
+        with patch.dict(os.environ, {
+            "VERCEL": "",
+            "VERCEL_ENV": "",
+            "AWS_LAMBDA_FUNCTION_NAME": "",
+            "ENVIRONMENT": "development",
+            "KV_REST_API_URL": "",
+            "KV_REST_API_TOKEN": "",
+            "UPSTASH_REDIS_REST_URL": "",
+            "UPSTASH_REDIS_REST_TOKEN": "",
+        }):
+            self.assertIsInstance(get_token_store(), MemoryTokenStore)
+
     def test_token_expires(self):
         context = {"trace_id": "expired"}
         lyrics = [{"bar": 1, "chord": "Am", "text": "line"}]
@@ -337,14 +398,16 @@ class TestLyricsVocalHITL(unittest.TestCase):
         self.assertEqual(args[3], 60)
 
     def test_vocal_approval_requires_auth(self):
-        from fastapi.testclient import TestClient
-        from app import app
+        from app import generation_router, require_generation
 
-        response = TestClient(app).post(
-            "/api/vocals/approve",
-            json={"token": "unused", "lyrics_prompt": "A hopeful line"},
-        )
-        self.assertEqual(response.status_code, 401)
+        route = next(route for route in generation_router.routes if getattr(route, "path", None) == "/api/vocals/approve")
+        self.assertTrue(any(dependency.call is require_generation for dependency in route.dependant.dependencies))
+
+    def test_video_remux_requires_auth(self):
+        from app import app, require_generation
+
+        route = next(route for route in app.routes if getattr(route, "path", None) == "/api/v1/tools/attach-riff-to-video")
+        self.assertTrue(any(dependency.call is require_generation for dependency in route.dependant.dependencies))
 
     def test_verify_token_checks_signature_issuer_audience_and_expiry(self):
         from app import verify_token
@@ -386,14 +449,10 @@ class TestLyricsVocalHITL(unittest.TestCase):
             self.assertIsNone(verify_token(f"{header_segment}.{expired_segment}.{expired_signature}"))
 
     def test_client_auth_token_endpoint(self):
-        from fastapi.testclient import TestClient
-        from app import app, verify_token
+        from app import get_client_auth_token, verify_token
 
-        client = TestClient(app)
-        for method in ("get", "post"):
-            response = getattr(client, method)("/api/auth/token")
-            self.assertEqual(response.status_code, 200)
-            data = response.json()
+        with patch.dict(os.environ, {"RIFFS_ENABLE_DEMO_AUTH": "true"}, clear=True):
+            data = get_client_auth_token()
             self.assertIn("access_token", data)
             self.assertEqual(data["token_type"], "bearer")
             claims = verify_token(data["access_token"])
@@ -401,20 +460,62 @@ class TestLyricsVocalHITL(unittest.TestCase):
             self.assertIn("generation", claims["entitlements"])
             self.assertIn("beta_tester", claims["roles"])
 
+    def test_demo_token_issuance_is_disabled_in_deployed_environments(self):
+        from fastapi import HTTPException
+        from app import get_client_auth_token
+
+        for marker in (
+            {"VERCEL": "1"},
+            {"VERCEL_ENV": "preview"},
+            {"AWS_LAMBDA_FUNCTION_NAME": "riffs-api"},
+            {"ENVIRONMENT": "production"},
+        ):
+            with self.subTest(marker=marker), patch.dict(os.environ, {
+                "RIFFS_ENABLE_DEMO_AUTH": "true",
+                "VERCEL": "",
+                "VERCEL_ENV": "",
+                "AWS_LAMBDA_FUNCTION_NAME": "",
+                "ENVIRONMENT": "",
+                **marker,
+            }, clear=True):
+                with self.assertRaises(HTTPException) as ctx:
+                    get_client_auth_token()
+                self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_verification_fails_without_an_explicit_jwt_secret(self):
+        from app import verify_token
+
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(verify_token("header.payload.signature"))
+
     def test_generation_rate_counter_in_memory_fallback(self):
         from app import increment_generation_count
 
-        with patch.dict(os.environ, {"REDIS_URL": ""}, clear=False), patch("riffs_api.storage.get_redis", side_effect=Exception("Redis unavailable")):
+        with patch.dict(os.environ, {"REDIS_URL": ""}, clear=True), patch("riffs_api.storage.get_redis", side_effect=Exception("Redis unavailable")):
             c1 = increment_generation_count("fallback-user", now=100)
             c2 = increment_generation_count("fallback-user", now=101)
             self.assertEqual(c1, 1)
             self.assertEqual(c2, 2)
 
-    def test_default_vocal_secret_configured(self):
-        from app import DEFAULT_VOCAL_SECRET
-        self.assertGreaterEqual(len(DEFAULT_VOCAL_SECRET.encode("utf-8")), 32)
-        with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(os.getenv("RIFFS_VOCAL_SECRET", DEFAULT_VOCAL_SECRET), DEFAULT_VOCAL_SECRET)
+    def test_rate_limiting_fails_closed_without_redis_in_deployed_environments(self):
+        from app import increment_generation_count
+
+        for marker in (
+            {"VERCEL": "1"},
+            {"VERCEL_ENV": "preview"},
+            {"AWS_LAMBDA_FUNCTION_NAME": "riffs-api"},
+            {"ENVIRONMENT": "production"},
+        ):
+            with self.subTest(marker=marker), patch.dict(os.environ, {
+                "REDIS_URL": "",
+                "VERCEL": "",
+                "VERCEL_ENV": "",
+                "AWS_LAMBDA_FUNCTION_NAME": "",
+                "ENVIRONMENT": "",
+                **marker,
+            }, clear=True), patch("riffs_api.storage.get_redis", side_effect=RuntimeError("Redis not configured")):
+                with self.assertRaisesRegex(RuntimeError, "Shared Redis rate limiting is required"):
+                    increment_generation_count("production-user", now=100)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # RIFFs: Autonomous Music Theory & Acoustic Sketching Co-Producer
 
-[![CI / Regression Tests](https://img.shields.io/badge/tests-114%20passed-emerald)](https://github.com/abheeshudhungana-source/riffs-agent)
+[![CI / Regression Tests](https://img.shields.io/badge/tests-verification%20pending-yellow)](https://github.com/abheeshudhungana-source/riffs-agent)
 [![Live Demo](https://img.shields.io/badge/live%20demo-riffs--agent.vercel.app-blue)](https://riffs-agent.vercel.app)
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-indigo)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-slate)](LICENSE)
@@ -86,7 +86,7 @@ To prevent architectural scope creep and protect musicians' creative ownership, 
    * **Why it's out of scope:** Video tooling is restricted strictly to headless stream copy audio muxing (`attach_riff_to_video` via FFmpeg `-c:v copy -an`). There are no timelines, color grading, visual filters, or transition effects.
 
 7. **Destructive Cloud Operations & Unbounded Storage:**
-   * **Why it's out of scope:** Enforcing principle of least privilege. The agent possesses zero bucket deletion privileges (`storage:delete` permanently revoked) and enforces strict per-session path confinement (`audio/sessions/{session_id}/`).
+   * **Why it's out of scope:** The current agent does not need general-purpose storage tools. Its tool allowlist contains only progression parsing, score drafting, and symbolic export; take API reads check the authenticated owner.
 
 ---
 
@@ -98,18 +98,18 @@ During peer review and security audits, our testing partner surfaced several cri
 | :-: | :--- | :--- | :--- |
 | **1** | **Unbounded Lyrics Prompts Bypassing Safety** | Lyrics prompt could be abused to request full songs or bypass instrumental default boundaries. | Added dual-prompt validation in `validate_prompt()`. Rejects `complete song` / `full song` (`LOOP_LENGTH_LIMIT`) and restricts lyrics generation strictly to a 4-line verse aligned to chord bars. |
 | **2** | **Vocal Approval Token Replay & Forgery** | An issued vocal token could theoretically be reused across takes or with modified lyrics. | Implemented HMAC token payloads binding SHA-256 hashes of context and exact lyrics. Enforced atomic once-only consumption with replay protection and fail-closed validation. |
-| **3** | **Session Path Scoping & Traversal Vulnerability** | Storage tool paths matched prefixes loosely (e.g. `audio/sessions/abc` matching `audio/sessions/abc_other/...`) and lacked directory traversal checks. | Built `validate_session_storage_path()` enforcing exact trailing slashes (`audio/sessions/{session_id}/`) and blocking `..` path traversal attempts. |
-| **4** | **Serverless Production Authentication Failures** | Deployed Vercel site returned HTTP 401 *"Valid bearer token required"* and HTTP 503 *"Vocal signing secret is not configured"*. | Built full JWT UI client with `/api/auth/token` endpoint, fallback signing secrets (`DEFAULT_JWT_SECRET`, `DEFAULT_VOCAL_SECRET`), in-memory rate limiting, and `/tmp` filesystem fallback. |
+| **3** | **Session Ownership & Unneeded Tool Access** | Take reads did not check record ownership, and the allowlist included unused storage, publishing, invite, and remux stubs guarded only by a caller-controlled `approved` flag. | Take records now carry the authenticated subject; API reads and take reuse are owner-scoped. The agent allowlist contains only progression parsing, score drafting, and symbolic export. The video-remux route requires the generation entitlement. |
+| **4** | **Serverless Production Authentication Failures** | Static fallback signing secrets and an unauthenticated token-mint endpoint could grant anyone a beta generation token; in-memory rate limits were not shared across instances. | Static JWT and vocal secrets were removed. `/api/auth/token` only issues an ephemeral local demo token when `RIFFS_ENABLE_DEMO_AUTH=true` and is disabled on deployments. Deployed generation fails closed without configured JWT settings and shared Redis rate limits. Vocal approval requires a configured secret and shared replay store. |
 | **5** | **Vocal Lead Playback Disconnection** | Approved vocal tracks were synthesized in MIDI and WAV export, but silent in live browser playback. | Wired `loop.tiers.vocal` into `tierGainNodes.vocal` in Web Audio mixer, added vocal mute toggle, and added real-time synchronized Web Speech API narration. |
 
 ### ⚠️ Known Limitations & Architectural Tradeoffs
 
 Being transparent about architectural boundaries is critical for production readiness:
 
-1. **Serverless Distributed Replay Protection vs. Zero-Config Demo Mode (`token_store.py`):**
-   * **The Tradeoff:** True zero-trust replay prevention across distributed serverless workers requires a centralized, atomic data store like Upstash Redis (`KV_REST_API_URL` and `KV_REST_API_TOKEN`). When deployed to serverless environments without external KV credentials provisioned, the backend falls back to an in-memory token store (`_memory_store`) so public demo links function seamlessly without 503 configuration crashes.
-   * **The Gap:** In this unconfigured fallback mode, the in-memory store is thread-safe within a single Lambda container, but concurrent requests hitting separate cold containers could theoretically allow a token replay before instance teardown.
-   * **Production Recommendation:** For enterprise production deployments, set `RIFFS_REQUIRE_KV=true` to enforce strict fail-closed behavior (`TokenStoreUnavailable`), requiring verified external distributed state before processing vocal authorizations.
+1. **Shared Authentication and Replay Storage:**
+   * **Local Demo Mode:** Set `RIFFS_ENABLE_DEMO_AUTH=true` in a local `.env` to enable the UI's local token helper. It uses a process-random signing secret and cannot mint tokens in Vercel or AWS Lambda.
+   * **Staging and Production:** Configure `RIFFS_JWT_SECRET`, issuer, audience, `REDIS_URL`, `RIFFS_VOCAL_SECRET`, and shared Upstash/Vercel KV credentials. The deployment fails closed when required auth, rate-limit, signing, or replay storage is missing or unavailable. Never use demo auth or local in-memory storage for staging or production validation.
+   * **Staging Status:** A real IdP-issued token and live shared Redis/KV connection still need end-to-end validation in staging.
 
 2. **Client-Side Web Speech API Synchronization vs. Web Audio Synthesis:**
    * **The Tradeoff:** We chose zero-dependency, browser-native client-side speech synthesis rather than round-tripping to cloud TTS APIs (keeping latency near-zero and free of third-party API costs).
@@ -121,7 +121,7 @@ Being transparent about architectural boundaries is critical for production read
 ## 🛠️ How to Run It
 
 > [!NOTE]
-> **Zero API Keys Required for Full Operation:** The agent runs 100% out-of-the-box using its deterministic music theory, chord parsing, tab generation, and Web Audio DSP engine. Providing an `ANTHROPIC_API_KEY` is completely optional and only used for natural language style enrichment.
+> **No model-provider key required for core generation:** Instrumental composition uses deterministic music theory and the Web Audio preview. Local API use opts into the local-only demo token helper via `RIFFS_ENABLE_DEMO_AUTH=true`; vocal approval additionally needs a locally generated `RIFFS_VOCAL_SECRET`. Demo token issuance is disabled on deployments. Staging and production require an IdP-issued token plus shared Redis/KV configuration.
 > 
 > **Zero Build Steps:** There are no Node.js or `npm` build requirements. The frontend is vanilla HTML/CSS/Web Audio served directly by FastAPI.
 
@@ -141,10 +141,14 @@ Access the live production deployment directly in any modern desktop or mobile b
    source .venv/bin/activate
    pip install -r requirements.txt
    ```
-3. **Configure environment variables (optional):**
+3. **Configure local environment variables:**
    ```bash
    cp .env.example .env
-   # ANTHROPIC_API_KEY is OPTIONAL. If omitted, the agent uses its built-in rule heuristics.
+   # RIFFS_ENABLE_DEMO_AUTH=true is local-only; deployment code ignores it.
+   # For local vocal approval, set RIFFS_VOCAL_SECRET to a fresh random value:
+   python -c "import secrets; print(secrets.token_urlsafe(48))"
+   # Paste the printed value into .env as RIFFS_VOCAL_SECRET.
+   # ANTHROPIC_API_KEY remains optional for core deterministic generation.
    ```
 4. **Start the FastAPI server:**
    ```bash
@@ -190,7 +194,7 @@ Follow these 4 steps to test the full agent loop, safety guardrails, and music t
 
 The codebase includes comprehensive unit, integration, DSP, and security regression coverage:
 
-* **Run Full Backend & Security Test Suite (114 tests):**
+* **Run Full Backend & Security Test Suite:**
   ```bash
   python -m unittest discover tests
   ```
@@ -213,18 +217,19 @@ riffs_agent/
 ├── index.html                   # Interactive frontend, Web Audio synthesizer, and practice UI
 ├── requirements.txt             # Python runtime dependencies
 ├── riffs_api/
-│   ├── agent_loop.py            # Sandboxed agent loop environment & tool runner
+│   ├── agent_loop.py            # Deterministic loop using the allowlisted tools
 │   ├── audit_trace.py           # Structured, redacted operational audit logging
 │   ├── originality.py           # Melodic similarity contour comparison
 │   ├── progression.py           # Chord progression & scale degree parser
 │   ├── prompt_guardrails.py     # Anti-plagiarism, instrumental-only, and loop limit checks
 │   ├── prompt_intent.py         # Natural language prompt extraction
 │   ├── render.py                # Symbolic package renderer (MusicXML, MIDI, JSON)
-│   ├── storage.py               # Session-scoped storage tools with path validation
-│   ├── take_store.py            # Local & serverless persistent take archive
+│   ├── storage.py               # Shared Redis client for rate limits and replay storage
+│   ├── take_store.py            # Local take archive with authenticated-owner checks
+│   ├── tool_access.py           # Least-privilege allowlist for the three active tools
 │   ├── token_store.py           # Atomic single-use token store for vocal approval
 │   ├── video.py                 # Headless FFmpeg video remuxing with shell sanitization
 │   └── vocal_approval.py        # Cryptographic HMAC token signing & verification
-├── tests/                       # 114 automated test cases
+├── tests/                       # Backend, security, and regression tests
 └── docs/                        # Complete PRDs, architecture diagrams, and threat models
 ```

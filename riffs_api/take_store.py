@@ -19,7 +19,12 @@ def take_store_directory() -> Path:
         p = Path(configured).expanduser()
         p.mkdir(parents=True, exist_ok=True)
         return p
-    if os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+    if (
+        os.getenv("VERCEL")
+        or os.getenv("VERCEL_ENV")
+        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("ENVIRONMENT", "").lower() == "production"
+    ):
         tmp_target = Path(tempfile.gettempdir()) / "riffs_takes"
         tmp_target.mkdir(parents=True, exist_ok=True)
         return tmp_target
@@ -39,13 +44,15 @@ def take_store_directory() -> Path:
         return tmp_fallback
 
 
-def store_take(take: dict[str, Any]) -> dict[str, Any]:
-    """Write an immutable JSON take record and return its stable local ID."""
+def store_take(take: dict[str, Any], owner_id: str) -> dict[str, Any]:
+    """Write an immutable take record owned by one authenticated principal."""
+    if not isinstance(owner_id, str) or not owner_id.strip():
+        raise ValueError("owner_id is required to store a take")
     storage_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
     directory = take_store_directory()
     directory.mkdir(parents=True, exist_ok=True)
-    record = {"storage_id": storage_id, "created_at": created_at, "take": take}
+    record = {"storage_id": storage_id, "owner_id": owner_id, "created_at": created_at, "take": take}
     destination = directory / f"{storage_id}.json"
     temporary = directory / f".{storage_id}.tmp"
     temporary.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
@@ -58,8 +65,10 @@ def store_take(take: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def get_take(storage_id: str) -> dict[str, Any] | None:
-    """Load a take by the storage ID returned in its generation response."""
+def get_take(storage_id: str, owner_id: str) -> dict[str, Any] | None:
+    """Load a take only when its recorded owner matches the authenticated principal."""
+    if not isinstance(owner_id, str) or not owner_id.strip():
+        return None
     try:
         normalized = str(uuid.UUID(storage_id))
     except (ValueError, TypeError, AttributeError):
@@ -67,4 +76,7 @@ def get_take(storage_id: str) -> dict[str, Any] | None:
     path = take_store_directory() / f"{normalized}.json"
     if not path.is_file():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if record.get("owner_id") != owner_id:
+        return None
+    return record
