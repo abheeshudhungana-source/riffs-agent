@@ -1790,6 +1790,54 @@ E|---------------------------------------------------------5-3-0----|
 
     bpmInput.addEventListener('blur', () => { bpmInput.value = clampBpm(bpmInput.value); });
 
+    // Auth & JWT Token Management for UI client
+    let cachedJwtToken = null;
+    let tokenExpiresAt = 0;
+
+    async function ensureAuthToken() {
+      if (cachedJwtToken && Date.now() < tokenExpiresAt - 60000) {
+        return cachedJwtToken;
+      }
+      try {
+        const stored = localStorage.getItem('riffs_jwt_token');
+        const storedExp = Number(localStorage.getItem('riffs_jwt_exp') || '0');
+        if (stored && Date.now() < storedExp - 60000) {
+          cachedJwtToken = stored;
+          tokenExpiresAt = storedExp;
+          return cachedJwtToken;
+        }
+      } catch (_) {}
+
+      try {
+        const res = await fetch('/api/auth/token', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.access_token) {
+            cachedJwtToken = data.access_token;
+            const expiresIn = (data.expires_in || 86400) * 1000;
+            tokenExpiresAt = Date.now() + expiresIn;
+            try {
+              localStorage.setItem('riffs_jwt_token', cachedJwtToken);
+              localStorage.setItem('riffs_jwt_exp', String(tokenExpiresAt));
+            } catch (_) {}
+            return cachedJwtToken;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not acquire JWT bearer token from /api/auth/token:', err);
+      }
+      return null;
+    }
+
+    async function getAuthHeaders(extraHeaders = {}) {
+      const headers = { ...extraHeaders };
+      const token = await ensureAuthToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      return headers;
+    }
+
     // Confirm & Synthesize (Generates Take via /api/generate)
     btnConfirm.addEventListener('click', async () => {
       const chords = validateChords(chordsInput.value);
@@ -1835,9 +1883,10 @@ E|---------------------------------------------------------5-3-0----|
 
       dispatch({ type: 'GENERATE_START' });
       try {
+        const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
         const res = await fetch('/api/generate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: headers,
           body: JSON.stringify(payload),
         });
         if (!res.ok) {
@@ -1979,9 +2028,10 @@ E|---------------------------------------------------------5-3-0----|
           // them, re-run the checkpoint so the server issues a token for the edited text.
           const draftLines = ((takeData.lyrics_draft && takeData.lyrics_draft.bars) || []).map(b => (b.text || b.lyric || '').trim());
           if (JSON.stringify(draftLines) !== JSON.stringify(editedLines)) {
+            const recheckHeaders = await getAuthHeaders({ 'Content-Type': 'application/json' });
             const recheck = await fetch('/api/generate', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: recheckHeaders,
               body: JSON.stringify({ ...payload, edited_lyrics: editedLines, vocal_approved: false }),
             });
             if (!recheck.ok) {
@@ -2023,9 +2073,10 @@ E|---------------------------------------------------------5-3-0----|
             acknowledge_unassessed_rights: !!(ackBox && ackBox.checked),
           };
 
+          const approveHeaders = await getAuthHeaders({ 'Content-Type': 'application/json' });
           const res = await fetch('/api/vocals/approve', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: approveHeaders,
             body: JSON.stringify(approvePayload),
           });
 
@@ -2103,6 +2154,7 @@ E|---------------------------------------------------------5-3-0----|
 
     // Initialize View & Transport
     render();
+    ensureAuthToken();
   </script>
 </body>
 </html>

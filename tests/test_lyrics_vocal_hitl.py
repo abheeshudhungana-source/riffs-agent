@@ -385,6 +385,31 @@ class TestLyricsVocalHITL(unittest.TestCase):
         with patch.dict(os.environ, config):
             self.assertIsNone(verify_token(f"{header_segment}.{expired_segment}.{expired_signature}"))
 
+    def test_client_auth_token_endpoint(self):
+        from fastapi.testclient import TestClient
+        from app import app, verify_token
+
+        client = TestClient(app)
+        for method in ("get", "post"):
+            response = getattr(client, method)("/api/auth/token")
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertIn("access_token", data)
+            self.assertEqual(data["token_type"], "bearer")
+            claims = verify_token(data["access_token"])
+            self.assertIsNotNone(claims)
+            self.assertIn("generation", claims["entitlements"])
+            self.assertIn("beta_tester", claims["roles"])
+
+    def test_generation_rate_counter_in_memory_fallback(self):
+        from app import increment_generation_count
+
+        with patch.dict(os.environ, {"REDIS_URL": ""}, clear=False), patch("riffs_api.storage.get_redis", side_effect=Exception("Redis unavailable")):
+            c1 = increment_generation_count("fallback-user", now=100)
+            c2 = increment_generation_count("fallback-user", now=101)
+            self.assertEqual(c1, 1)
+            self.assertEqual(c2, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
