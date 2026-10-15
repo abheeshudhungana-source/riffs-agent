@@ -10,18 +10,33 @@ from pathlib import Path
 from typing import Any
 
 
+import tempfile
+
+
 def take_store_directory() -> Path:
     configured = os.getenv("RIFFS_TAKE_STORE_PATH")
     if configured:
-        return Path(configured).expanduser()
+        p = Path(configured).expanduser()
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    if os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        tmp_target = Path(tempfile.gettempdir()) / "riffs_takes"
+        tmp_target.mkdir(parents=True, exist_ok=True)
+        return tmp_target
     try:
         candidate = Path.home() / ".riffs-agent" / "takes"
         candidate.mkdir(parents=True, exist_ok=True)
         return candidate
     except (PermissionError, OSError):
+        pass
+    try:
         fallback = Path(__file__).resolve().parent.parent / ".riffs_takes"
         fallback.mkdir(parents=True, exist_ok=True)
         return fallback
+    except (PermissionError, OSError):
+        tmp_fallback = Path(tempfile.gettempdir()) / "riffs_takes"
+        tmp_fallback.mkdir(parents=True, exist_ok=True)
+        return tmp_fallback
 
 
 def store_take(take: dict[str, Any]) -> dict[str, Any]:
