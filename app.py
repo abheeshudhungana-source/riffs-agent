@@ -8,6 +8,7 @@ import hmac
 import json
 import math
 import re
+import secrets
 import time
 from pathlib import Path
 from typing import Literal, Optional, List, Dict, Any, Union
@@ -26,12 +27,34 @@ def _decode_jwt_segment(segment: str) -> bytes:
     return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
 
 
-DEFAULT_JWT_SECRET = "riffs-production-jwt-signing-secret-32bytes-long"
-DEFAULT_JWT_ISSUER = "https://riffs-agent.vercel.app"
-DEFAULT_JWT_AUDIENCE = "riffs-agent"
-DEFAULT_VOCAL_SECRET = "riffs-prod-secret-token-key-2026-hitl-checkpoint"
+LOCAL_DEMO_ISSUER = "riffs-local-demo"
+LOCAL_DEMO_AUDIENCE = "riffs-local-api"
+_LOCAL_DEMO_JWT_SECRET = secrets.token_urlsafe(48)
 
-os.environ.setdefault("RIFFS_VOCAL_SECRET", DEFAULT_VOCAL_SECRET)
+
+def _is_deployed_environment() -> bool:
+    return bool(
+        os.getenv("VERCEL")
+        or os.getenv("VERCEL_ENV")
+        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("ENVIRONMENT", "").lower() == "production"
+    )
+
+
+def _demo_auth_enabled() -> bool:
+    enabled = os.getenv("RIFFS_ENABLE_DEMO_AUTH", "").strip().lower() in {"1", "true", "yes"}
+    return enabled and not _is_deployed_environment()
+
+
+def _jwt_settings() -> tuple[str | None, str | None, str | None]:
+    secret = os.getenv("RIFFS_JWT_SECRET")
+    issuer = os.getenv("RIFFS_JWT_ISSUER")
+    audience = os.getenv("RIFFS_JWT_AUDIENCE")
+    if _demo_auth_enabled():
+        secret = secret or _LOCAL_DEMO_JWT_SECRET
+        issuer = issuer or LOCAL_DEMO_ISSUER
+        audience = audience or LOCAL_DEMO_AUDIENCE
+    return secret, issuer, audience
 
 
 def issue_jwt_token(
@@ -40,9 +63,11 @@ def issue_jwt_token(
     entitlements: list[str] | None = None,
     expires_in: int = 86400,
 ) -> str:
-    secret = os.getenv("RIFFS_JWT_SECRET") or DEFAULT_JWT_SECRET
-    issuer = os.getenv("RIFFS_JWT_ISSUER") or DEFAULT_JWT_ISSUER
-    audience = os.getenv("RIFFS_JWT_AUDIENCE") or DEFAULT_JWT_AUDIENCE
+    if not _demo_auth_enabled():
+        raise RuntimeError("Only local demo authentication may issue test tokens")
+    secret, issuer, audience = _jwt_settings()
+    if not secret or not issuer or not audience or len(secret.encode("utf-8")) < 32:
+        raise RuntimeError("JWT signing is not configured")
     header = {"alg": "HS256", "typ": "JWT"}
     claims = {
         "sub": sub,
@@ -65,10 +90,8 @@ def issue_jwt_token(
 
 def verify_token(token: str) -> dict | None:
     """Verify an HS256 access token; fail closed when auth is not configured."""
-    secret = os.getenv("RIFFS_JWT_SECRET") or DEFAULT_JWT_SECRET
-    issuer = os.getenv("RIFFS_JWT_ISSUER") or DEFAULT_JWT_ISSUER
-    audience = os.getenv("RIFFS_JWT_AUDIENCE") or DEFAULT_JWT_AUDIENCE
-    if len(secret.encode("utf-8")) < 32 or not issuer or not audience:
+    secret, issuer, audience = _jwt_settings()
+    if not secret or len(secret.encode("utf-8")) < 32 or not issuer or not audience:
         return None
     try:
         header_segment, claims_segment, signature_segment = token.split(".")
@@ -124,7 +147,9 @@ def increment_generation_count(user: str, now: float | None = None) -> int:
         redis_client = storage.get_redis()
         return int(redis_client.eval(_RATE_LIMIT_SCRIPT, 1, key, RATE_WINDOW_SECONDS))
     except Exception as exc:
-        if not os.getenv("REDIS_URL") or not os.getenv("RIFFS_REQUIRE_REDIS"):
+        if not os.getenv("REDIS_URL"):
+            if _is_deployed_environment():
+                raise RuntimeError("Shared Redis rate limiting is required in deployed environments") from exc
             prev_window, count = _IN_MEMORY_RATE_LIMITS.get(user_key, (window, 0))
             if prev_window != window:
                 count = 1
@@ -155,7 +180,7 @@ def require_generation(authorization: str | None = Header(default=None)) -> str:
     return claims["sub"]
 
 
-generation_router = APIRouter(dependencies=[Depends(require_generation)])
+generation_router = APIRouter()
 
 # Import the RIFFs agent harness
 try:
@@ -198,8 +223,13 @@ async def health_check():
 # Client auth token endpoint
 @app.get("/api/auth/token")
 @app.post("/api/auth/token")
-async def get_client_auth_token():
-    token = issue_jwt_token()
+def get_client_auth_token():
+    if not _demo_auth_enabled():
+        raise HTTPException(404, "Not found")
+    try:
+        token = issue_jwt_token()
+    except RuntimeError as exc:
+        raise HTTPException(503, "Demo authentication is unavailable") from exc
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -249,7 +279,7 @@ LOCK_ALIASES = {
 }
 
 @generation_router.post("/api/generate")
-async def generate_riff(req: GenerateRequest):
+async def generate_riff(req: GenerateRequest, user_id: str = Depends(require_generation)):
     # Server-side boundary validations (Deliverable 3 error handling table)
     instruments = req.instruments or []
     if len(instruments) < 1 or len(instruments) > 3:
@@ -366,7 +396,7 @@ async def generate_riff(req: GenerateRequest):
         previous_take = None
         if req.base_storage_id:
             from riffs_api.take_store import get_take
-            stored_record = get_take(req.base_storage_id)
+            stored_record = get_take(req.base_storage_id, owner_id=user_id)
             if stored_record is None:
                 return JSONResponse(
                     status_code=404,
@@ -394,6 +424,7 @@ async def generate_riff(req: GenerateRequest):
             vocal_approval_token=req.vocal_approval_token,
             edited_lyrics=req.edited_lyrics,
             acknowledge_unassessed_rights=bool(req.acknowledge_unassessed_rights),
+            storage_owner_id=user_id,
         )
         return {
             "status": "success",
@@ -486,7 +517,7 @@ def _vocal_error_response(exc: Exception):
 
 
 @generation_router.post("/api/vocals/approve")
-async def approve_vocal_track(req: VocalApproveRequest):
+async def approve_vocal_track(req: VocalApproveRequest, user_id: str = Depends(require_generation)):
     try:
         data = RiffsAgent().generate(
             prompt=req.prompt or "Accompaniment with lead vocal track",
@@ -504,6 +535,7 @@ async def approve_vocal_track(req: VocalApproveRequest):
             edited_lyrics=req.edited_lyrics,
             vocal_trace_id=req.vocal_trace_id,
             acknowledge_unassessed_rights=bool(req.acknowledge_unassessed_rights),
+            storage_owner_id=user_id,
         )
         return {"status": "success", "data": data}
     except Exception as exc:
@@ -518,11 +550,11 @@ async def approve_vocal_track(req: VocalApproveRequest):
 app.include_router(generation_router)
 
 
-@app.get("/api/takes/{storage_id}", dependencies=[Depends(require_generation)])
-async def get_stored_take(storage_id: str):
-    """Read a take saved in this app instance's configured local folder."""
+@app.get("/api/takes/{storage_id}")
+def get_stored_take(storage_id: str, user_id: str = Depends(require_generation)):
+    """Read a take only when it belongs to the authenticated principal."""
     from riffs_api.take_store import get_take
-    record = get_take(storage_id)
+    record = get_take(storage_id, owner_id=user_id)
     if record is None:
         return JSONResponse(
             status_code=404,
@@ -540,7 +572,7 @@ class VideoRemuxRequest(BaseModel):
 
 
 @app.post("/api/v1/tools/attach-riff-to-video")
-async def attach_video_endpoint(req: VideoRemuxRequest):
+async def attach_video_endpoint(req: VideoRemuxRequest, user_id: str = Depends(require_generation)):
     import base64
     from riffs_api.video import attach_riff_to_video
     try:

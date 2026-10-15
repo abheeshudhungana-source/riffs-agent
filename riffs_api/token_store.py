@@ -86,6 +86,15 @@ _override: Optional[Any] = None
 _memory_store = MemoryTokenStore()
 
 
+def _is_deployed_environment() -> bool:
+    return bool(
+        os.getenv("VERCEL")
+        or os.getenv("VERCEL_ENV")
+        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("ENVIRONMENT", "").lower() == "production"
+    )
+
+
 def set_token_store(store: Optional[Any]) -> None:
     """Install a store explicitly (tests); pass None to restore environment selection."""
     global _override
@@ -99,7 +108,7 @@ def get_token_store() -> Any:
     token = os.getenv("KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
     if url and token:
         return UpstashRedisTokenStore(url, token)
-    if os.getenv("VERCEL") or os.getenv("ENVIRONMENT", "").lower() == "production":
+    if _is_deployed_environment():
         raise TokenStoreUnavailable(
             "Vocal approval needs a shared token store in production: set KV_REST_API_URL and "
             "KV_REST_API_TOKEN (Vercel KV / Upstash). In-memory storage cannot prevent replay "

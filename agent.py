@@ -504,16 +504,10 @@ def verify_and_consume_vocal_token(
             "Explicit acknowledgment required: rights are unassessed and no copyright clearance is granted.",
         )
 
-    store = token_store
-    if store is None:
-        try:
-            store = get_token_store()
-        except Exception as e:
-            if not (os.getenv("KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL")):
-                from riffs_api.token_store import _memory_store
-                store = _memory_store
-            else:
-                raise e
+    # The factory provides in-memory storage only for local development and
+    # raises when shared replay storage is missing in a deployed environment.
+    # Do not catch that error and silently downgrade replay protection.
+    store = token_store if token_store is not None else get_token_store()
     if not store.consume_token(claims["jti"], claims["exp"]):
         _fail("TOKEN_REPLAYED", "Vocal approval token has already been used.")
 
@@ -912,6 +906,7 @@ class RiffsAgent:
         vocal_trace_id: Optional[str] = None,
         acknowledge_unassessed_rights: bool = False,
         token_store: Any = None,
+        storage_owner_id: str = "local",
     ) -> Dict[str, Any]:
         """
         Executes symbolic blueprint generation with part-locking and optional lyrics.
@@ -1238,7 +1233,7 @@ class RiffsAgent:
                 from riffs_api.take_store import store_take
                 stored_take = dict(result_data)
                 stored_take["vocal_confirmation_token"] = "[REDACTED]"
-                result_data["take_storage"] = store_take(stored_take)
+                result_data["take_storage"] = store_take(stored_take, owner_id=storage_owner_id)
 
                 take_id = self._next_take_id
                 self._next_take_id += 1
@@ -1347,7 +1342,7 @@ class RiffsAgent:
             result_data["ai_enrichment"] = claude_enhancement
 
         from riffs_api.take_store import store_take
-        result_data["take_storage"] = store_take(result_data)
+        result_data["take_storage"] = store_take(result_data, owner_id=storage_owner_id)
 
         # Store in take history for part-locking non-destructive stack
         take_id = self._next_take_id

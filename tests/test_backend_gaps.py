@@ -34,8 +34,9 @@ class BackendGapTests(unittest.TestCase):
             previous = os.environ.get("RIFFS_TAKE_STORE_PATH")
             os.environ["RIFFS_TAKE_STORE_PATH"] = directory
             try:
-                saved = store_take({"take_id": 7, "score": {"lanes": []}})
-                loaded = get_take(saved["storage_id"])
+                saved = store_take({"take_id": 7, "score": {"lanes": []}}, owner_id="alice")
+                loaded = get_take(saved["storage_id"], owner_id="alice")
+                hidden_from_other_owner = get_take(saved["storage_id"], owner_id="bob")
             finally:
                 if previous is None:
                     os.environ.pop("RIFFS_TAKE_STORE_PATH", None)
@@ -43,6 +44,27 @@ class BackendGapTests(unittest.TestCase):
                     os.environ["RIFFS_TAKE_STORE_PATH"] = previous
         self.assertEqual(loaded["take"]["take_id"], 7)
         self.assertEqual(loaded["storage_id"], saved["storage_id"])
+        self.assertEqual(loaded["owner_id"], "alice")
+        self.assertIsNone(hidden_from_other_owner)
+
+    def test_take_endpoint_hides_records_from_other_authenticated_users(self):
+        from app import get_stored_take
+
+        with tempfile.TemporaryDirectory() as directory:
+            previous_path = os.environ.get("RIFFS_TAKE_STORE_PATH")
+            os.environ["RIFFS_TAKE_STORE_PATH"] = directory
+            try:
+                saved = store_take({"take_id": 8}, owner_id="alice")
+                alice_response = get_stored_take(saved["storage_id"], user_id="alice")
+                self.assertEqual(alice_response["status"], "success")
+
+                bob_response = get_stored_take(saved["storage_id"], user_id="bob")
+                self.assertEqual(bob_response.status_code, 404)
+            finally:
+                if previous_path is None:
+                    os.environ.pop("RIFFS_TAKE_STORE_PATH", None)
+                else:
+                    os.environ["RIFFS_TAKE_STORE_PATH"] = previous_path
 
     def test_melody_match_is_transposition_invariant_and_not_clearance(self):
         pitches = [60, 62, 65, 64, 67, 69]

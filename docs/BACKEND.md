@@ -63,9 +63,9 @@ Each successful response includes the chosen top-level `groove`, its `groove_sou
 
 The `license_certificate` is always `not_issued` with `rights_grant: false`; no verified licensed sample source is configured. The WAV preview uses oscillator synthesis with no recorded samples. MP3 encoding and the frontend Save MP3 flow remain unimplemented.
 
-Generation and vocal approval require a signed HS256 bearer token with the `beta_tester` role and `generation` entitlement. Configure `RIFFS_JWT_SECRET` (at least 32 random bytes), `RIFFS_JWT_ISSUER`, and `RIFFS_JWT_AUDIENCE`; tokens must include `sub`, `exp`, `iss`, `aud`, `roles`, and `entitlements`. Missing or invalid configuration fails closed. Each subject is limited to 10 requests per fixed 60-second window across app instances through `REDIS_URL`; Redis errors return 503. Vocal approval also requires `RIFFS_VOCAL_SECRET` and a shared replay store configured with `KV_REST_API_URL` and `KV_REST_API_TOKEN` (Upstash Redis/Vercel KV). Missing or unavailable replay storage fails closed.
+Generation, vocal approval, take reads, and video remuxing require a signed HS256 bearer token with the `beta_tester` role and `generation` entitlement. Configure `RIFFS_JWT_SECRET` (at least 32 random bytes), `RIFFS_JWT_ISSUER`, and `RIFFS_JWT_AUDIENCE`; tokens must include `sub`, `exp`, `iss`, `aud`, `roles`, and `entitlements`. There are no built-in signing-secret fallbacks. Local development may opt into an ephemeral demo-token helper with `RIFFS_ENABLE_DEMO_AUTH=true`; the helper is disabled on Vercel, AWS Lambda, and environments marked `ENVIRONMENT=production`. Deployed environments require shared Redis (`REDIS_URL`) for a per-subject limit of 10 requests per fixed 60-second window and fail closed if it is unavailable. Vocal approval also requires `RIFFS_VOCAL_SECRET` and a shared replay store configured with `KV_REST_API_URL` and `KV_REST_API_TOKEN` (Upstash Redis/Vercel KV); missing or unavailable replay storage fails closed.
 
-Takes are archived as JSON under `~/.riffs-agent/takes` by default; set `RIFFS_TAKE_STORE_PATH` to choose another local folder. Read a saved record with `GET /api/takes/{storage_id}` or pass its ID as `base_storage_id` to seed a later take's locked lanes. This is local filesystem persistence and depends on the host retaining that folder.
+Takes are archived as JSON under `~/.riffs-agent/takes` by default; set `RIFFS_TAKE_STORE_PATH` to choose another local folder. Each record stores the authenticated subject that created it. `GET /api/takes/{storage_id}` and `base_storage_id` reuse are owner-scoped; another subject receives the same 404 used for a missing record. This is local filesystem persistence and depends on the host retaining that folder; it is not shared across serverless instances.
 
 If `RIFFS_MELODY_CORPUS` points to a JSON array of entries (`{"id":"...","pitches":[60,62,...]}` or `{"id":"...","intervals":[2,-1,...]}`), the backend compares melodic interval windows and reports possible contour matches. An absent corpus is reported as `not_configured`; the matcher is a similarity signal, not copyright clearance.
 
@@ -85,17 +85,9 @@ These checks are a deterministic ingress baseline. The optional local contour ma
 
 `POST /api/v1/agent/run` records each observation, state-based decision, action result, and post-action observation while parsing a progression, drafting a score, and exporting the symbolic package. An optional prompt is checked before parsing; an unsafe request is observed as `unsafe_request`, then the policy records a `refuse` action and ends in `refused` without drafting. A parse failure is observed as `parse_failed`; the policy then records a `request_clarification` action and ends in `awaiting_input`. The route caps the loop at five steps. Its policy is deterministic and does not use an LLM.
 
-## Day 6: Least-privilege tool access control & session storage isolation
+## Day 6: Least-privilege tool access and ownership
 
-The tool gateway (`riffs_api/tool_access.py`) enforces strict least privilege across all agent tool executions:
-- **Least-Privilege Allowlist (`ALLOWED_TOOLS`)**:
-  - **Read-Only**: `search_docs`, `parse_progression`, `users_lookup`, and `inspect_take_history` are restricted to `access: "read"`; any attempt to execute with `action="write"` raises `PermissionError`.
-  - **Safe Internal Write**: `draft_score`, `session_chat`, `archive_take` (soft-delete to recoverable trash), and `export_symbolic` execute without human friction.
-  - **High-Blast / External Write**: `export_symbolic_package`, `approve_vocal_lead`, `remux_video`, and `send_collab_invite` require explicit human-in-the-loop approval (`require_approval: True`), failing closed if `approved=True` is not provided.
-  - **Revoked & Denied**: Destructive actions (`session_delete`, `storage_delete`) and zombie prototype permissions (`playlist_modify`, `playlist_read`, `analytics_read`) are excluded from the allowlist and raise `PermissionError` by default.
-- **Per-Session Path Scoping (`validate_session_storage_path`)**:
-  - Storage read and write actions are deterministically constrained to `audio/sessions/{session_id}/*`.
-  - Path traversal (`..`) and sibling prefix matches (e.g. `audio/sessions/{session_id}_other/`) are rejected with `PermissionError`.
-- **Runtime Enforcement**:
-  - The observable agent loop (`riffs_api/agent_loop.py`) routes all step actions through `call_tool()`, ensuring all actions pass through the authorization boundary.
+The tool gateway (`riffs_api/tool_access.py`) allows only the three operations used by the current deterministic agent loop: read-only `parse_progression`, write `draft_score`, and write `export_symbolic`. Unused lookups, history reads, storage mutations, public exports, invites, vocal actions, and remux tools are not allowlisted; passing `approved=True` cannot grant access. The loop routes each action through `call_tool()`, which denies unknown tools and actions by default.
+
+Take records include their authenticated owner. API reads and take reuse check that owner before returning data. The API does not expose general-purpose session storage tools; those remain unavailable until a trusted session-ownership and approval system exists.
 
