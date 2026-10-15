@@ -81,6 +81,20 @@ During peer review and security audits, our testing partner surfaced several cri
 | **4** | **Serverless Production Authentication Failures** | Deployed Vercel site returned HTTP 401 *"Valid bearer token required"* and HTTP 503 *"Vocal signing secret is not configured"*. | Built full JWT UI client with `/api/auth/token` endpoint, fallback signing secrets (`DEFAULT_JWT_SECRET`, `DEFAULT_VOCAL_SECRET`), in-memory rate limiting, and `/tmp` filesystem fallback. |
 | **5** | **Vocal Lead Playback Disconnection** | Approved vocal tracks were synthesized in MIDI and WAV export, but silent in live browser playback. | Wired `loop.tiers.vocal` into `tierGainNodes.vocal` in Web Audio mixer, added vocal mute toggle, and added real-time synchronized Web Speech API narration. |
 
+### ⚠️ Known Limitations & Architectural Tradeoffs
+
+Being transparent about architectural boundaries is critical for production readiness:
+
+1. **Serverless Distributed Replay Protection vs. Zero-Config Demo Mode (`token_store.py`):**
+   * **The Tradeoff:** True zero-trust replay prevention across distributed serverless workers requires a centralized, atomic data store like Upstash Redis (`KV_REST_API_URL` and `KV_REST_API_TOKEN`). When deployed to serverless environments without external KV credentials provisioned, the backend falls back to an in-memory token store (`_memory_store`) so public demo links function seamlessly without 503 configuration crashes.
+   * **The Gap:** In this unconfigured fallback mode, the in-memory store is thread-safe within a single Lambda container, but concurrent requests hitting separate cold containers could theoretically allow a token replay before instance teardown.
+   * **Production Recommendation:** For enterprise production deployments, set `RIFFS_REQUIRE_KV=true` to enforce strict fail-closed behavior (`TokenStoreUnavailable`), requiring verified external distributed state before processing vocal authorizations.
+
+2. **Client-Side Web Speech API Synchronization vs. Web Audio Synthesis:**
+   * **The Tradeoff:** We chose zero-dependency, browser-native client-side speech synthesis rather than round-tripping to cloud TTS APIs (keeping latency near-zero and free of third-party API costs).
+   * **The Gap:** Browser speech engines vary across platforms; Safari iOS and background tabs can throttle or drop `speechSynthesis.speak()` calls if not initiated inside a direct user gesture.
+   * **The Fallback:** The musical backing track and synthetic vocal lead (`tierGainNodes.vocal`) run directly inside the low-level Web Audio graph, ensuring uninterrupted playback even if the browser voice narrator stalls.
+
 ---
 
 ## 🛠️ How to Run It
