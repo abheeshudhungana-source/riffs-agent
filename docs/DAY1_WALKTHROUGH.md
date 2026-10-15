@@ -16,8 +16,8 @@ All Day 1 requirements specified in the PRD and Implementation Plan have been fu
 - **Part-Locking & Stems Metadata:**
   - Enforces `locked_parts` flags: locked lanes maintain byte-integrity across takes.
   - Names output stems following the exact PRD standard: `riff_{key}_{bpm}bpm_{instrument}.wav`.
-- **Royalty-Free Licensing Sink:**
-  - Generates verifiable `CERT-RIFFS-2026-X{HASH}` license certificates for commercial safety.
+- **License Certificate Boundary:**
+  - Returns `not_issued` until a trusted verifier can confirm licensed sample provenance and an issuer is implemented.
 - **Resilient AI Harness:**
   - Calls Anthropic Claude when `ANTHROPIC_API_KEY` is present.
   - Seamlessly falls back to the deterministic symbolic music theory engine if offline or key is unset, guaranteeing 0% failure rate.

@@ -1,8 +1,13 @@
 """Regression coverage for the human-reviewed vocal lane and approval boundary."""
 
 import copy
+import base64
+import hashlib
+import hmac
+import json
 import os
 import sys
+import time
 import unittest
 from unittest.mock import patch
 
@@ -19,6 +24,17 @@ from riffs_api.vocal_approval import (
 )
 
 
+class _MemoryRedis:
+    def __init__(self):
+        self.values = set()
+
+    def set(self, key, value, *, ex, nx):
+        if nx and key in self.values:
+            return None
+        self.values.add(key)
+        return True
+
+
 class TestLyricsVocalHITL(unittest.TestCase):
     def setUp(self):
         self.secret_patch = patch.dict(os.environ, {
@@ -26,10 +42,13 @@ class TestLyricsVocalHITL(unittest.TestCase):
             "ANTHROPIC_API_KEY": "",
         })
         self.secret_patch.start()
+        self.redis_patch = patch("riffs_api.storage.get_redis", return_value=_MemoryRedis())
+        self.redis_patch.start()
         self.agent = RiffsAgent()
         self.agent.api_key = None
 
     def tearDown(self):
+        self.redis_patch.stop()
         self.secret_patch.stop()
 
     def _request(self, *, chords="Am - F - C - G", **overrides):
@@ -88,6 +107,14 @@ class TestLyricsVocalHITL(unittest.TestCase):
         self.assertFalse(consume_vocal_token(token, context, [{**lyrics[0], "text": "edited"}]))
         self.assertTrue(consume_vocal_token(token, context, lyrics))
         self.assertFalse(consume_vocal_token(token, context, lyrics))
+
+    def test_vocal_replay_storage_failure_fails_closed(self):
+        context = {"trace_id": "redis-unavailable"}
+        lyrics = [{"bar": 1, "chord": "Am", "text": "line"}]
+        token = issue_vocal_token(context, lyrics)
+        with patch("riffs_api.storage.get_redis", side_effect=ConnectionError("offline")):
+            with self.assertRaises(VocalApprovalUnavailable):
+                consume_vocal_token(token, context, lyrics)
 
     def test_token_expires(self):
         context = {"trace_id": "expired"}
@@ -193,10 +220,164 @@ class TestLyricsVocalHITL(unittest.TestCase):
             client = TestClient(app)
         except ImportError as exc:
             self.skipTest(f"API test dependencies are not installed here: {exc}")
-        response = client.post("/api/generate", json={"prompt": "Write lyrics about love"})
+        claims = {"sub": "test-user", "roles": ["beta_tester"], "entitlements": ["generation"]}
+        with patch("app.verify_token", return_value=claims), patch("app.increment_generation_count", return_value=1):
+            response = client.post(
+                "/api/generate",
+                json={"prompt": "Write lyrics about love"},
+                headers={"Authorization": "Bearer test-token"},
+            )
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["code"], "INSTRUMENTAL_ONLY")
         self.assertIn("alternative", response.json())
+
+    def test_generate_rejects_legacy_license_flag(self):
+        try:
+            from fastapi.testclient import TestClient
+            from app import app
+            from unittest.mock import patch
+            client = TestClient(app)
+        except ImportError as exc:
+            self.skipTest(f"API test dependencies are not installed here: {exc}")
+
+        agent = RiffsAgent()
+        agent.api_key = None
+        claims = {"sub": "test-user", "roles": ["beta_tester"], "entitlements": ["generation"]}
+        with patch("app.RiffsAgent", return_value=agent), \
+                patch("app.verify_token", return_value=claims), \
+                patch("app.increment_generation_count", return_value=1):
+            response = client.post(
+                "/api/generate",
+                json={"prompt": "x", "issue_license": True},
+                headers={"Authorization": "Bearer test-token"},
+            )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_generate_never_issues_license(self):
+        from fastapi.testclient import TestClient
+        from app import app
+
+        agent = RiffsAgent()
+        agent.api_key = None
+        claims = {"sub": "test-user", "roles": ["beta_tester"], "entitlements": ["generation"]}
+        with patch("app.RiffsAgent", return_value=agent), \
+                patch("app.verify_token", return_value=claims), \
+                patch("app.increment_generation_count", return_value=1):
+            response = TestClient(app).post(
+                "/api/generate",
+                json={"prompt": "x"},
+                headers={"Authorization": "Bearer test-token"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["data"]
+        self.assertEqual(payload["license_certificate"]["status"], "not_issued")
+        self.assertIsNone(payload["license_certificate"]["license_id"])
+
+    def test_generate_requires_auth(self):
+        from fastapi.testclient import TestClient
+        from app import app
+
+        response = TestClient(app).post("/api/generate", json={"prompt": "x"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_generate_requires_entitlement(self):
+        from fastapi.testclient import TestClient
+        from app import app
+
+        claims = {"sub": "test-user", "roles": ["beta_tester"], "entitlements": []}
+        with patch("app.verify_token", return_value=claims):
+            response = TestClient(app).post(
+                "/api/generate",
+                json={"prompt": "x"},
+                headers={"Authorization": "Bearer no-generation-entitlement"},
+            )
+        self.assertEqual(response.status_code, 403)
+
+    def test_generate_rate_limited(self):
+        from fastapi.testclient import TestClient
+        from app import app
+
+        client = TestClient(app)
+        headers = {"Authorization": "Bearer authorized-beta-tester"}
+        claims = {"sub": "test-user", "roles": ["beta_tester"], "entitlements": ["generation"]}
+        counts = {}
+
+        def increment(user, now):
+            counts[user] = counts.get(user, 0) + 1
+            return counts[user]
+
+        with patch("app.verify_token", return_value=claims), patch("app.increment_generation_count", side_effect=increment):
+            statuses = [
+                client.post("/api/generate", json={"prompt": "x"}, headers=headers).status_code
+                for _ in range(11)
+            ]
+        self.assertEqual(statuses[-1], 429)
+
+    def test_generation_rate_counter_uses_shared_redis_window(self):
+        from app import increment_generation_count
+        from unittest.mock import Mock
+
+        redis_client = Mock()
+        redis_client.eval.return_value = 4
+        with patch("riffs_api.storage.get_redis", return_value=redis_client):
+            count = increment_generation_count("user-1", now=120)
+
+        self.assertEqual(count, 4)
+        args = redis_client.eval.call_args.args
+        self.assertEqual(args[1], 1)
+        self.assertEqual(args[2], f"rl:generation:{hashlib.sha256(b'user-1').hexdigest()[:32]}:2")
+        self.assertEqual(args[3], 60)
+
+    def test_vocal_approval_requires_auth(self):
+        from fastapi.testclient import TestClient
+        from app import app
+
+        response = TestClient(app).post(
+            "/api/vocals/approve",
+            json={"token": "unused", "lyrics_prompt": "A hopeful line"},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_verify_token_checks_signature_issuer_audience_and_expiry(self):
+        from app import verify_token
+
+        secret = "test-signing-secret-with-32-bytes!!"
+        header = {"alg": "HS256", "typ": "JWT"}
+        claims = {
+            "sub": "test-user",
+            "iss": "test-issuer",
+            "aud": "test-audience",
+            "exp": time.time() + 60,
+            "roles": ["beta_tester"],
+            "entitlements": ["generation"],
+        }
+
+        def encode(value):
+            return base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode()).decode().rstrip("=")
+
+        header_segment = encode(header)
+        claims_segment = encode(claims)
+        signed = f"{header_segment}.{claims_segment}".encode("ascii")
+        signature = base64.urlsafe_b64encode(hmac.new(secret.encode(), signed, hashlib.sha256).digest()).decode().rstrip("=")
+        token = f"{header_segment}.{claims_segment}.{signature}"
+
+        config = {
+            "RIFFS_JWT_SECRET": secret,
+            "RIFFS_JWT_ISSUER": "test-issuer",
+            "RIFFS_JWT_AUDIENCE": "test-audience",
+        }
+        with patch.dict(os.environ, config):
+            self.assertEqual(verify_token(token), claims)
+            self.assertIsNone(verify_token(f"{header_segment}.{claims_segment}.invalid"))
+
+        expired_claims = {**claims, "exp": time.time() - 1}
+        expired_segment = encode(expired_claims)
+        expired_signed = f"{header_segment}.{expired_segment}".encode("ascii")
+        expired_signature = base64.urlsafe_b64encode(hmac.new(secret.encode(), expired_signed, hashlib.sha256).digest()).decode().rstrip("=")
+        with patch.dict(os.environ, config):
+            self.assertIsNone(verify_token(f"{header_segment}.{expired_segment}.{expired_signature}"))
 
 
 if __name__ == "__main__":

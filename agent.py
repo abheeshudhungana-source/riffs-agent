@@ -246,42 +246,17 @@ def generate_tab_score(chords: List[str]) -> str:
 
     return "\n".join([lines[s] for s in string_names])
 
-def issue_license_certificate(
-    score: Dict[str, Any],
-    key: str,
-    bpm: int,
-    instruments: List[str],
-    chords: List[str],
-    prompt: str = "",
-) -> Dict[str, Any]:
-    """Generates a verifiable digital license certificate proving audio provenance (Day 3 Feature)."""
-    raw_payload = json.dumps({
-        "key": key,
-        "bpm": bpm,
-        "chords": chords,
-        "lanes": [
-            {"instrument": lane.get("instrument"), "hash": lane.get("hash")}
-            for lane in score.get("lanes", [])
-        ],
-    }, sort_keys=True, separators=(",", ":"))
-    digest = hashlib.sha256(raw_payload.encode("utf-8")).hexdigest()
-    license_id = f"RIFFS-LIC-{digest[:12].upper()}"
-    return {
-        "license_id": license_id,
-        "status": "issued",
-        "issuer": "RIFFs Autonomous Licensing Authority",
-        "issued_at": "2026-10-13T12:00:00Z",
-        "terms": "100% Royalty-Free Commercial & Personal Use",
-        "sample_provenance": "Licensed acoustic multisamples (RIFFs Core Sound Matrix)",
-        "hash_sha256": digest,
-        "metadata": {
-            "key": key,
-            "bpm": bpm,
-            "instruments": sorted(instruments),
-            "chords": chords,
-            "prompt": prompt,
-        },
-    }
+def issue_license_certificate(track_id: str, provenance: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Fail closed until RIFFs can verify licensed sample provenance."""
+    if not provenance or not provenance.get("verified"):
+        return {
+            "license_id": None,
+            "status": "not_issued",
+            "reason": "No verified licensed sample provenance is configured.",
+        }
+    # A caller-provided boolean is not proof. Replace this stub only when a
+    # trusted provenance verifier and an issuer are implemented together.
+    raise NotImplementedError(f"License issuance is not enabled for track {track_id}.")
 
 
 def parse_root_pitch_class(chord: str) -> int:
@@ -521,7 +496,6 @@ class RiffsAgent:
         seed: Optional[int] = None,
         previous_score: Optional[Dict[str, Any]] = None,
         base_take_id: Optional[int] = None,
-        issue_license: bool = False,
         groove: str = "straight",
         lyrics_prompt: Optional[str] = None,
         lyrics_language: str = "en",
@@ -635,21 +609,11 @@ class RiffsAgent:
                 "note_vector_sha256": part_scores.get(inst, {}).get("note_vector_sha256"),
             })
 
-        if issue_license:
-            license_cert = issue_license_certificate(
-                score=score,
-                key=key,
-                bpm=bpm,
-                instruments=instruments,
-                chords=parsed_chords,
-                prompt=prompt,
-            )
-        else:
-            license_cert = {
-                "license_id": None,
-                "status": "not_issued",
-                "reason": "No verified licensed audio sample source is configured.",
-            }
+        license_cert = {
+            "license_id": None,
+            "status": "not_issued",
+            "reason": "No verified licensed sample provenance is configured.",
+        }
 
         # Try Anthropic Claude if API key is present
         claude_enhancement = None

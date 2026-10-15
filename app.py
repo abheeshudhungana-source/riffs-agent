@@ -1,14 +1,137 @@
 import os
 import uuid
+import base64
+import binascii
+import hashlib
+import hmac
+import json
+import math
+import re
+import time
 from pathlib import Path
 from typing import Literal, Optional, List, Dict, Any, Union
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from riffs_api.progression import ProgressionError
 from riffs_api.routes import router as riff_routes
 from riffs_api.prompt_guardrails import PromptRefusal
 from riffs_api.vocal_approval import VocalApprovalError, VocalApprovalUnavailable, VocalInputError
+from riffs_api import storage
+
+
+def _decode_jwt_segment(segment: str) -> bytes:
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", segment):
+        raise ValueError("Malformed token segment")
+    return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
+
+
+def verify_token(token: str) -> dict | None:
+    """Verify an HS256 access token; fail closed when auth is not configured."""
+    secret = os.getenv("RIFFS_JWT_SECRET", "")
+    issuer = os.getenv("RIFFS_JWT_ISSUER", "")
+    audience = os.getenv("RIFFS_JWT_AUDIENCE", "")
+    if len(secret.encode("utf-8")) < 32 or not issuer or not audience:
+        return None
+
+    try:
+        header_segment, claims_segment, signature_segment = token.split(".")
+        header = json.loads(_decode_jwt_segment(header_segment))
+        claims = json.loads(_decode_jwt_segment(claims_segment))
+        if (
+            not isinstance(header, dict)
+            or header.get("alg") != "HS256"
+            or header.get("typ") not in (None, "JWT")
+            or set(header) - {"alg", "typ"}
+        ):
+            return None
+        if not isinstance(claims, dict):
+            return None
+
+        signed = f"{header_segment}.{claims_segment}".encode("ascii")
+        expected = hmac.new(secret.encode("utf-8"), signed, hashlib.sha256).digest()
+        if not hmac.compare_digest(expected, _decode_jwt_segment(signature_segment)):
+            return None
+
+        now = time.time()
+        if (
+            isinstance(claims.get("exp"), bool)
+            or not isinstance(claims.get("exp"), (int, float))
+            or not math.isfinite(claims["exp"])
+            or claims["exp"] <= now
+        ):
+            return None
+        if claims.get("nbf") is not None:
+            if (
+                isinstance(claims["nbf"], bool)
+                or not isinstance(claims["nbf"], (int, float))
+                or not math.isfinite(claims["nbf"])
+                or claims["nbf"] > now
+            ):
+                return None
+        if claims.get("iss") != issuer:
+            return None
+        claim_audience = claims.get("aud")
+        if audience not in (claim_audience if isinstance(claim_audience, list) else [claim_audience]):
+            return None
+        if not isinstance(claims.get("sub"), str) or not claims["sub"].strip():
+            return None
+        if not isinstance(claims.get("roles", []), list) or not isinstance(claims.get("entitlements", []), list):
+            return None
+        return claims
+    except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError, binascii.Error):
+        return None
+
+
+RATE_LIMIT = 10
+RATE_WINDOW_SECONDS = 60
+_RATE_LIMIT_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+return count
+"""
+def increment_generation_count(user: str, now: float | None = None) -> int:
+    now = time.time() if now is None else now
+    window = int(now // RATE_WINDOW_SECONDS)
+    user_key = hashlib.sha256(user.encode("utf-8")).hexdigest()[:32]
+    key = f"rl:generation:{user_key}:{window}"
+    return int(storage.get_redis().eval(_RATE_LIMIT_SCRIPT, 1, key, RATE_WINDOW_SECONDS))
+
+
+def require_generation(authorization: str | None = Header(default=None)) -> str:
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(
+            status_code=401,
+            detail="Valid bearer token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    claims = verify_token(token.strip())
+    if not claims:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if "beta_tester" not in claims.get("roles", []) or "generation" not in claims.get("entitlements", []):
+        raise HTTPException(status_code=403, detail="Generation entitlement required")
+
+    now = time.time()
+    try:
+        count = increment_generation_count(claims["sub"], now)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Rate-limit service unavailable") from exc
+    if count > RATE_LIMIT:
+        retry_after = max(1, RATE_WINDOW_SECONDS - int(now % RATE_WINDOW_SECONDS))
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded",
+            headers={"Retry-After": str(retry_after)},
+        )
+    return claims["sub"]
+
+
+generation_router = APIRouter(dependencies=[Depends(require_generation)])
 
 # Import the RIFFs agent harness
 try:
@@ -45,6 +168,8 @@ async def health_check():
     }
 
 class GenerateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     prompt: str
     key: Optional[str] = "Am"
     bpm: Optional[int] = 110
@@ -54,7 +179,6 @@ class GenerateRequest(BaseModel):
     seed: Optional[int] = None
     previous_score: Optional[Dict[str, Any]] = None
     base_take_id: Optional[int] = None
-    issue_license: Optional[bool] = True
     groove: Literal["straight", "half_time", "swing"] = "straight"
     lyrics_prompt: Optional[str] = None
     lyrics_language: Optional[str] = "en"
@@ -83,7 +207,7 @@ LOCK_ALIASES = {
     "drums": {"bass_drums", "floor_tom", "bongos", "cymbals", "drum_kit", "triangle"},
 }
 
-@app.post("/api/generate")
+@generation_router.post("/api/generate")
 async def generate_riff(req: GenerateRequest):
     # Server-side boundary validations (Deliverable 3 error handling table)
     instruments = req.instruments or []
@@ -210,7 +334,6 @@ async def generate_riff(req: GenerateRequest):
             seed=req.seed,
             previous_score=req.previous_score,
             base_take_id=req.base_take_id,
-            issue_license=True if req.issue_license is None else req.issue_license,
             groove=req.groove,
             lyrics_prompt=req.lyrics_prompt,
             lyrics_language=req.lyrics_language or "en",
@@ -282,7 +405,7 @@ class VocalApproveRequest(BaseModel):
     lyrics_language: Optional[str] = "en"
 
 
-@app.post("/api/vocals/approve")
+@generation_router.post("/api/vocals/approve")
 async def approve_vocal_track(req: VocalApproveRequest):
     trace_id = req.vocal_trace_id or uuid.uuid4().hex
     try:
@@ -318,6 +441,9 @@ async def approve_vocal_track(req: VocalApproveRequest):
         return JSONResponse(status_code=422, content={"status": "error", "code": "LYRICS_INVALID", "detail": str(exc), "trace_id": trace_id})
     except Exception as exc:
         return JSONResponse(status_code=500, content={"status": "error", "code": "VOCAL_RENDER_FAILED", "detail": str(exc)})
+
+
+app.include_router(generation_router)
 
 
 class VideoRemuxRequest(BaseModel):

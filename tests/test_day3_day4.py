@@ -6,7 +6,7 @@ Day 3:
   - Whitelist file extension enforcement (.mp4, .mov)
   - Shell injection filename sanitization
   - Headless stream copy execution
-- Verifiable digital license certificate (license_cert.json)
+- License certificates remain unavailable without verified provenance.
 
 Day 4:
 - Natural language prompt-to-music understanding (chords, key, BPM, and styles)
@@ -23,7 +23,7 @@ from composer import (
     extract_musical_intent_from_prompt,
     _PRESETS,
 )
-from agent import RiffsAgent, issue_license_certificate
+from agent import RiffsAgent
 from riffs_api.video import (
     attach_riff_to_video,
     validate_video_input,
@@ -72,21 +72,18 @@ class TestDay3VideoRemuxTool(unittest.TestCase):
 
 
 class TestDay3DigitalLicenseCertificate(unittest.TestCase):
-    def test_issue_license_certificate_contains_verifiable_hash_and_terms(self):
+    def test_license_certificate_is_not_issued_without_verified_provenance(self):
         agent = RiffsAgent()
         res = agent.generate(
             prompt="Neo soul pocket groove",
             key="Am",
             bpm=110,
             chords="Am - F - C - G",
-            issue_license=True,
         )
         cert = res["license_certificate"]
-        self.assertEqual(cert["status"], "issued")
-        self.assertTrue(cert["license_id"].startswith("RIFFS-LIC-"))
-        self.assertEqual(cert["issuer"], "RIFFs Autonomous Licensing Authority")
-        self.assertIn("Royalty-Free", cert["terms"])
-        self.assertTrue(len(cert["hash_sha256"]) == 64)
+        self.assertEqual(cert["status"], "not_issued")
+        self.assertIsNone(cert["license_id"])
+        self.assertIn("No verified licensed sample provenance", cert["reason"])
 
 
 class TestDay4PromptMusicalIntelligence(unittest.TestCase):

@@ -22,8 +22,8 @@ try:
 except ImportError:
     litellm = None
 
-# Test Claude connection using LiteLLM per coach instructions
-def test_claude_connection():
+# Manual Claude connection check; intentionally excluded from pytest collection.
+def check_claude_connection():
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         print("Missing ANTHROPIC_API_KEY in .env file. Please check your setup.")
@@ -53,4 +53,4 @@ def test_claude_connection():
         return False
 
 if __name__ == "__main__":
-    test_claude_connection()
+    check_claude_connection()

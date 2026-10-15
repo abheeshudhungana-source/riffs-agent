@@ -8,14 +8,12 @@ import logging
 import os
 import re
 import secrets
-import threading
 import time
 from typing import Any
+from riffs_api import storage
 
 logger = logging.getLogger("riffs.vocal_approval")
 VOCAL_TOKEN_TTL_SECONDS = 600
-_USED_TOKENS: dict[str, int] = {}
-_TOKEN_LOCK = threading.Lock()
 _SUPPORTED_LANGUAGES = {"en", "es", "fr", "ja"}
 _SUPPORTED_STYLES = {"soulful_lead"}
 _HTML_TAG = re.compile(r"<\s*/?\s*[a-zA-Z][^>]*>")
@@ -130,14 +128,15 @@ def consume_vocal_token(token: str | None, context: dict[str, Any], lyrics: list
             token_id=token_id, draft_sha256=_fingerprint(lyrics),
         )
         return False
-    with _TOKEN_LOCK:
-        for used_token, used_expiry in list(_USED_TOKENS.items()):
-            if used_expiry < time.time():
-                del _USED_TOKENS[used_token]
-        if token in _USED_TOKENS:
-            emit_vocal_trace("approval_rejected", context, reason="replay", token_id=token_id)
-            return False
-        _USED_TOKENS[token] = expires
+    token_key = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    ttl = max(1, expires - int(time.time()))
+    try:
+        reserved = storage.get_redis().set(f"vocal:approval:used:{token_key}", "1", ex=ttl, nx=True)
+    except Exception as exc:
+        raise VocalApprovalUnavailable("Vocal approval is unavailable on this server.") from exc
+    if not reserved:
+        emit_vocal_trace("approval_rejected", context, reason="replay", token_id=token_id)
+        return False
     emit_vocal_trace(
         "approval_accepted", context,
         token_id=token_id, draft_sha256=_fingerprint(lyrics),

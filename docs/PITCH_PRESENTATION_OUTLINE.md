@@ -74,7 +74,7 @@ TOTAL DURATION: 3 Minutes 30 Seconds (Safe buffer under 4:00)
 > Our pipeline flows through five distinct stages:
 > 1. **Ingress:** Accepts typed chord progressions like `Am - F - C - G` or Nashville numbers `1 - 4 - 5 - 1`, validated on the client before submission.
 > 2. **Agent Harness:** The loop tracks up to 5 iterative takes, manages session state, and passes locked lane vectors to the LLM.
-> 3. **Symbolic Score & Licensing Gate:** Computes exact Nashville degrees, 6-string guitar tabs, and hashes a cryptographic Royalty-Free License Certificate.
+> 3. **Symbolic Score & Rights Boundary:** Computes exact Nashville degrees and 6-string guitar tabs. License certificate issuance remains disabled until licensed sample provenance can be verified.
 > 4. **Tool 1 (`render_riff_to_audio`):** Synthesizes isolated multisampled WAV stems and 320kbps master MP3s with standardized DAW naming.
 > 5. **Tool 2 (`attach_riff_to_video`):** A headless FFmpeg utility that strips mic noise and stream-copies the riff into MP4 video in under 1.5 seconds without re-encoding frames."
 
@@ -90,7 +90,7 @@ TOTAL DURATION: 3 Minutes 30 Seconds (Safe buffer under 4:00)
 >
 > Second, **Dual-Layer Resilience**: Even if the cloud LLM experiences network latency or API rate limits, our agent harness is paired with a deterministic local music theory engine that guarantees 0% runtime crash rates.
 >
-> Third, **Market Viability**: For creators, the verifiable license certificate solves copyright anxiety at the root. For musicians, the hardware-style part-locking and practice suite turn static sketches into active practice partners."
+> Third, **Market Viability**: RIFFs does not claim commercial clearance in the current prototype; verified license certificates remain a future capability. For musicians, the hardware-style part-locking and practice suite turn static sketches into active practice partners."
 
 ---
 

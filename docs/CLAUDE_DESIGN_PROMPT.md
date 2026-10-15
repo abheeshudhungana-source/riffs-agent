@@ -107,8 +107,9 @@ Musicians do not solely read 5-line staff notation. The UI must toggle dynamical
       {"lane": "drums", "filename": "riff_Am_110bpm_drums.wav", "locked": false}
     ],
     "license_certificate": {
-      "license_id": "CERT-RIFFS-2026-X892",
-      "status": "100% Royalty-Free Multisample Acoustic Engine"
+      "license_id": null,
+      "status": "not_issued",
+      "reason": "No verified licensed sample provenance is configured."
     }
   }
 }
