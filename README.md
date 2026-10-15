@@ -59,14 +59,34 @@
 
 ## 🚫 What's Explicitly Out of Scope
 
-To keep the agent's blast radius tightly contained and aligned with our musician-first charter, the following are **strictly out of scope**:
+To prevent architectural scope creep and protect musicians' creative ownership, the following are **deliberately and explicitly out of scope** (and should not be mistaken for missing features):
 
-1. **Full-Length Song Generation:** The agent refuses prompts requesting complete, radio-ready 3-minute songs (`LOOP_LENGTH_LIMIT`). RIFFs is a practice partner and sketching looper (4-to-8 bar loops), not an automated song-replacement factory.
-2. **Direct Commercial Song / Artist Clones:** Refuses verbatim reproductions of copyrighted songs, commercial master recordings, or prompts asking to sound identically like named artists.
-3. **Black-Box Flattened Audio Generation:** RIFFs will never generate an opaque audio waveform without an underlying, exportable symbolic score (MIDI/Nashville/Tab).
-4. **Server-Side Neural Audio Diffusion Models:** We do not host multi-gigabyte GPU diffusion models on serverless infrastructure. Audio rendering is deterministic, instantaneous, and computed in-browser.
-5. **Non-Linear Video Editing (NLE):** There is no video editing UI, timeline, filters, or visual transitions. Video interaction is restricted entirely to headless stream copy audio muxing.
-6. **Destructive Cloud Operations:** The agent possesses zero bucket deletion privileges (`storage:delete` revoked) and enforces strict per-session path confinement.
+1. **Full-Length (3+ Minute) Radio Song Generation:**
+   * **Why it's out of scope:** RIFFs is engineered as an interactive practice partner and co-producer for rehearsal and sketching (4-to-8 bar loops), not an automated song-replacement factory.
+   * **Enforced Behavior:** The agent actively enforces `LOOP_LENGTH_LIMIT` in prompt validation and safely refuses prompts requesting "full songs", "entire tracks", or "complete 3-minute arrangements".
+   * **Musician Alternative:** Musicians export multi-track MIDI stems and MusicXML into their DAW (Logic, Ableton, Pro Tools) to assemble full song structures around their favorite riff takes.
+
+2. **Hyper-Realistic Neural Voice / Artist Cloning:**
+   * **Why it's out of scope:** We deliberately avoid proprietary cloud voice-cloning APIs (e.g. ElevenLabs, Suno audio diffusion) to eliminate deepfake voice identity theft, copyright liability, and heavy API latency.
+   * **Enforced Behavior:** Vocal synthesis is performed entirely client-side using deterministic formant filtering (700Hz, 1350Hz, 2600Hz vocal fold acoustics) and browser-native Web Speech API synchronization.
+
+3. **Direct Commercial Song / Artist Plagiarism:**
+   * **Why it's out of scope:** Ethical and legal boundaries require that our agent does not reproduce copyrighted commercial melodies or master recordings.
+   * **Enforced Behavior:** Prompts requesting exact clones of named copyrighted tracks trigger anti-plagiarism guardrail refusals, and melodic contours are evaluated via `originality.py` pitch-interval n-gram similarity.
+
+4. **Digital Audio Workstation (DAW) Recording / Live Mic Tracking:**
+   * **Why it's out of scope:** RIFFs is a symbolic co-producer and notation generator, not a multi-track recording studio or native C++ audio plugin (VST3/AU/AAX).
+   * **Musician Alternative:** Use the browser Web Audio looper for immediate rehearsal; record real instruments against exported WAV mixes or import the MIDI into a DAW.
+
+5. **Black-Box Flattened Audio Generation:**
+   * **Why it's out of scope:** Generating an opaque, non-editable audio waveform without inspectable chords, tabs, and Nashville numbers defeats the purpose of music theory education and human practice.
+   * **Enforced Behavior:** Every sound heard in the looper is derived strictly from an underlying, inspectable, and editable symbolic score (`score_data`).
+
+6. **Non-Linear Video Editing (NLE) & Visual FX:**
+   * **Why it's out of scope:** Video tooling is restricted strictly to headless stream copy audio muxing (`attach_riff_to_video` via FFmpeg `-c:v copy -an`). There are no timelines, color grading, visual filters, or transition effects.
+
+7. **Destructive Cloud Operations & Unbounded Storage:**
+   * **Why it's out of scope:** Enforcing principle of least privilege. The agent possesses zero bucket deletion privileges (`storage:delete` permanently revoked) and enforces strict per-session path confinement (`audio/sessions/{session_id}/`).
 
 ---
 
