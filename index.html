@@ -1015,7 +1015,8 @@ E|---------------------------------------------------------5-3-0----|
       phase: 'ready', modalOpen: false, currentTake: 1, takes: [INITIAL_TAKE],
       lockedTracks: ['bass'], bpm: 110, baseBpm: 110, groove: 'straight',
       speedTrainerActive: false, loopCount: 0, metronomeActive: true,
-      muteTiers: { low: false, mid: false, high: false },
+      muteTiers: { low: false, mid: false, high: false, vocal: false },
+      vocalSpeechEnabled: true,
       ensemble: { low: 'bass_guitar', mid: 'rhythm_guitar', high: 'drum_kit' },
       error: null,
     };
@@ -1028,6 +1029,8 @@ E|---------------------------------------------------------5-3-0----|
           return { ...s, modalOpen: false, phase: s.takes.length ? 'ready' : 'idle' };
         case 'SET_GROOVE':
           return { ...s, groove: a.groove };
+        case 'TOGGLE_VOCAL_SPEECH':
+          return { ...s, vocalSpeechEnabled: !s.vocalSpeechEnabled };
         case 'GENERATE_START':
           return { ...s, phase: 'generating', error: null };
         case 'GENERATE_SUCCESS': {
@@ -1130,8 +1133,9 @@ E|---------------------------------------------------------5-3-0----|
     let lastLoopCompleted = -1;
 
     let masterGainNode = null;
-    const tierGainNodes = { low: null, mid: null, high: null };
+    const tierGainNodes = { low: null, mid: null, high: null, vocal: null };
     let metronomeGainNode = null;
+    let lastSpokenBar = -1;
 
     function getAudioContext() {
       if (!audioCtx) {
@@ -1141,9 +1145,9 @@ E|---------------------------------------------------------5-3-0----|
         masterGainNode.gain.value = 0.9;
         masterGainNode.connect(audioCtx.destination);
 
-        ['low', 'mid', 'high'].forEach(t => {
+        ['low', 'mid', 'high', 'vocal'].forEach(t => {
           tierGainNodes[t] = audioCtx.createGain();
-          tierGainNodes[t].gain.value = state.muteTiers[t] ? 0 : 1;
+          tierGainNodes[t].gain.value = (state.muteTiers && state.muteTiers[t]) ? 0 : 1;
           tierGainNodes[t].connect(masterGainNode);
         });
 
@@ -1165,6 +1169,10 @@ E|---------------------------------------------------------5-3-0----|
       if (animFrameId) {
         cancelAnimationFrame(animFrameId);
         animFrameId = null;
+      }
+      lastSpokenBar = -1;
+      if ('speechSynthesis' in window) {
+        try { window.speechSynthesis.cancel(); } catch (_) {}
       }
       isPlaying = false;
       const playBtn = document.getElementById('btn-play-pause');
@@ -1197,6 +1205,7 @@ E|---------------------------------------------------------5-3-0----|
       const tStart = ctx.currentTime + 0.05;
       loopStartTime = tStart;
       lastLoopCompleted = -1;
+      lastSpokenBar = -1;
 
       function playTier(floatArr, gainNode) {
         const ab = makeSeamlessBuffer(floatArr);
@@ -1214,6 +1223,9 @@ E|---------------------------------------------------------5-3-0----|
       playTier(loop.tiers.low, tierGainNodes.low);
       playTier(loop.tiers.mid, tierGainNodes.mid);
       playTier(loop.tiers.high, tierGainNodes.high);
+      if (loop.tiers.vocal) {
+        playTier(loop.tiers.vocal, tierGainNodes.vocal);
+      }
       playTier(loop.click, metronomeGainNode);
 
       isPlaying = true;
@@ -1248,6 +1260,37 @@ E|---------------------------------------------------------5-3-0----|
             ? 'bar-step flex-1 h-full rounded-sm bg-emerald-500 transition-all'
             : 'bar-step flex-1 h-full rounded-sm bg-slate-800 transition-all';
         });
+
+        // Synchronized Lyric Speech & Active Bar Highlighting
+        if (barNum !== lastSpokenBar) {
+          lastSpokenBar = barNum;
+          document.querySelectorAll('.lyric-bar-card').forEach(card => {
+            const b = Number(card.dataset.bar);
+            if (b === barNum) {
+              card.className = 'lyric-bar-card border border-amber-400 bg-amber-500/20 ring-1 ring-amber-400 p-3 rounded-xl flex flex-col justify-between transition-all';
+            } else {
+              card.className = 'lyric-bar-card border border-slate-800 bg-slate-900/60 p-3 rounded-xl flex flex-col justify-between transition-all';
+            }
+          });
+
+          if (state.vocalSpeechEnabled && 'speechSynthesis' in window) {
+            const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
+            const lyrics = activeTake && activeTake.payload && activeTake.payload.lyrics;
+            if (lyrics && lyrics.length) {
+              const item = lyrics.find(l => l.bar === barNum);
+              if (item && (item.text || item.lyric)) {
+                try {
+                  window.speechSynthesis.cancel();
+                  const utt = new SpeechSynthesisUtterance(item.text || item.lyric);
+                  utt.rate = Math.min(1.25, Math.max(0.85, state.bpm / 110));
+                  utt.pitch = 1.05;
+                  if (activeTake.payload.lyrics_language) utt.lang = activeTake.payload.lyrics_language;
+                  window.speechSynthesis.speak(utt);
+                } catch (_) {}
+              }
+            }
+          }
+        }
 
         if (loopIdx > lastLoopCompleted && lastLoopCompleted >= 0) {
           lastLoopCompleted = loopIdx;
@@ -1509,19 +1552,25 @@ E|---------------------------------------------------------5-3-0----|
           const langName = langMap[payload.lyrics_language] || payload.lyrics_language || 'English';
 
           let lyricsHtml = `
-            <div class="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div class="flex items-center gap-2">
                 <span class="text-xs font-bold text-amber-400">🎤 Vocal Lead Track</span>
                 <span class="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded capitalize font-medium">${styleName}</span>
                 <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">${langName}</span>
               </div>
-              <span class="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded">Synced to Chords</span>
+              <div class="flex items-center gap-2">
+                <button id="btn-toggle-speech" type="button" class="text-[10px] px-2.5 py-1 rounded-md border transition cursor-pointer flex items-center gap-1 ${state.vocalSpeechEnabled ? 'border-amber-500 bg-amber-500/20 text-amber-300 font-bold' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200'}">
+                  <span>🗣️ Lyrics Audio Voice:</span>
+                  <span class="underline">${state.vocalSpeechEnabled ? 'Sing/Speak ON' : 'OFF (Melody Synth Only)'}</span>
+                </button>
+                <span class="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded">Synced to Chords</span>
+              </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           `;
           payload.lyrics.forEach(item => {
             lyricsHtml += `
-              <div class="border border-slate-800 bg-slate-900/60 p-3 rounded-xl flex flex-col justify-between">
+              <div class="lyric-bar-card border border-slate-800 bg-slate-900/60 p-3 rounded-xl flex flex-col justify-between transition-all" data-bar="${item.bar}">
                 <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono mb-1.5">
                   <span class="font-bold text-amber-400">BAR ${item.bar}</span>
                   <span class="bg-indigo-950 border border-indigo-800 text-indigo-300 px-1.5 py-0.5 rounded text-[10px]">${item.chord}</span>
@@ -1532,6 +1581,15 @@ E|---------------------------------------------------------5-3-0----|
           });
           lyricsHtml += '</div>';
           $('lyrics-lines-container').innerHTML = lyricsHtml;
+          const btnToggleSpeech = $('btn-toggle-speech');
+          if (btnToggleSpeech) {
+            btnToggleSpeech.addEventListener('click', () => {
+              dispatch({ type: 'TOGGLE_VOCAL_SPEECH' });
+              if (!state.vocalSpeechEnabled && 'speechSynthesis' in window) {
+                try { window.speechSynthesis.cancel(); } catch (_) {}
+              }
+            });
+          }
         } else {
           $('lyrics-lines-container').innerHTML = `
             <p class="text-slate-400 italic text-center py-6">No lyrics generated for this take. Open "Shape the Groove" (Suno Dual Prompt) to add lyrics &amp; voice!</p>
