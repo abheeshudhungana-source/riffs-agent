@@ -10,16 +10,22 @@ from zipfile import ZipFile
 from riffs_api.progression import ProgressionError, parse_progression
 from riffs_api.prompt_guardrails import PromptRefusal, validate_prompt
 from riffs_api.render import render_symbolic_package, symbolic_package_filename
-from riffs_api.score import draft_score
+from riffs_api.prompt_intent import resolve_groove
+from riffs_api.score import SUPPORTED_INSTRUMENTS, draft_instrument_score, draft_score
 
 
 class RiffBuildEnvironment:
     """State and allowlisted actions for drafting a symbolic RIFF package."""
 
-    def __init__(self, progression: str, key: str | None, tempo_bpm: int, prompt: str = ""):
+    def __init__(self, progression: str, key: str | None, tempo_bpm: int, prompt: str = "", groove: str | None = None, instruments: list[str] | None = None):
         self.progression = progression
         self.key = key
         self.tempo_bpm = tempo_bpm
+        self.prompt = prompt
+        self.groove, self.groove_source = resolve_groove(prompt, groove)
+        self.instruments = instruments or ["bass_guitar", "rhythm_guitar", "drum_kit"]
+        if set(self.instruments) - set(SUPPORTED_INSTRUMENTS):
+            raise ValueError("Unsupported instrument in requested lanes.")
         self.parsed: dict[str, Any] | None = None
         self.score: dict[str, Any] | None = None
         self.export: dict[str, Any] | None = None
@@ -46,6 +52,9 @@ class RiffBuildEnvironment:
                 "progression": self.progression,
                 "key": self.key,
                 "tempo_bpm": self.tempo_bpm,
+                "groove": self.groove,
+                "groove_source": self.groove_source,
+                "instruments": self.instruments,
             },
             "parsed_progression": self.parsed,
             "score": self.score,
@@ -76,7 +85,11 @@ class RiffBuildEnvironment:
                 if self.parsed is None:
                     raise ValueError("Parse the progression before drafting a score.")
                 score = draft_score(self.progression, self.key, self.tempo_bpm)
-                self.score = asdict(score)
+                lanes = {
+                    instrument: asdict(draft_instrument_score(score, instrument, self.groove))
+                    for instrument in self.instruments
+                }
+                self.score = {**asdict(score), "groove": self.groove, "parts": lanes}
                 self.status = "scored"
                 return {
                     "ok": True,
@@ -88,15 +101,20 @@ class RiffBuildEnvironment:
             if action == "export_symbolic":
                 if self.score is None:
                     raise ValueError("Draft a score before exporting it.")
-                archive = render_symbolic_package(self.progression, self.key, self.tempo_bpm)
+                archive = render_symbolic_package(
+                    self.progression, self.key, self.tempo_bpm,
+                    prompt=self.prompt, groove=self.groove, instruments=self.instruments,
+                )
                 with ZipFile(BytesIO(archive)) as package:
                     filenames = package.namelist()
                 self.export = {
                     "filename": symbolic_package_filename(self.key, self.tempo_bpm),
                     "files": filenames,
                     "size_bytes": len(archive),
-                    "audio_rendered": False,
+                    "audio_rendered": True,
+                    "audio_status": "synthetic_preview",
                     "license_certificate_issued": False,
+                    "license_status": "not_issued",
                 }
                 self.status = "completed"
                 return {"ok": True, "action": action, **self.export}

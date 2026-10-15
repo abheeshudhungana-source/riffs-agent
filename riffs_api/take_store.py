@@ -1,0 +1,55 @@
+"""Local JSON take archive for persistent, inspectable generated takes."""
+
+from __future__ import annotations
+
+import json
+import os
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+def take_store_directory() -> Path:
+    configured = os.getenv("RIFFS_TAKE_STORE_PATH")
+    if configured:
+        return Path(configured).expanduser()
+    try:
+        candidate = Path.home() / ".riffs-agent" / "takes"
+        candidate.mkdir(parents=True, exist_ok=True)
+        return candidate
+    except (PermissionError, OSError):
+        fallback = Path(__file__).resolve().parent.parent / ".riffs_takes"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
+def store_take(take: dict[str, Any]) -> dict[str, Any]:
+    """Write an immutable JSON take record and return its stable local ID."""
+    storage_id = str(uuid.uuid4())
+    created_at = datetime.now(timezone.utc).isoformat()
+    directory = take_store_directory()
+    directory.mkdir(parents=True, exist_ok=True)
+    record = {"storage_id": storage_id, "created_at": created_at, "take": take}
+    destination = directory / f"{storage_id}.json"
+    temporary = directory / f".{storage_id}.tmp"
+    temporary.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+    temporary.replace(destination)
+    return {
+        "status": "stored",
+        "storage_id": storage_id,
+        "created_at": created_at,
+        "scope": "local_filesystem",
+    }
+
+
+def get_take(storage_id: str) -> dict[str, Any] | None:
+    """Load a take by the storage ID returned in its generation response."""
+    try:
+        normalized = str(uuid.UUID(storage_id))
+    except (ValueError, TypeError, AttributeError):
+        return None
+    path = take_store_directory() / f"{normalized}.json"
+    if not path.is_file():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))

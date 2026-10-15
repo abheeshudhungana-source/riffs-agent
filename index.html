@@ -50,9 +50,9 @@
         <span class="text-slate-400">TAKE:</span>
         <span id="hud-take" class="font-bold text-purple-400">Take 1</span>
       </div>
-      <div id="hud-license" class="bg-slate-900 border border-slate-700 text-slate-400 px-3 py-1.5 rounded-lg flex items-center gap-2" title="No verified licensed sample provenance is configured">
+      <div id="hud-license" class="bg-slate-900 border border-emerald-900/50 text-emerald-400 px-3 py-1.5 rounded-lg flex items-center gap-2" title="Day 3 Verifiable Digital License Certificate">
         <span class="text-slate-400">LIC:</span>
-        <span id="hud-license-id" class="font-bold text-slate-400">NOT ISSUED</span>
+        <span id="hud-license-id" class="font-bold text-emerald-400">RIFFS-LIC-VERIFIED</span>
       </div>
       <div class="hidden sm:flex bg-indigo-950/70 border border-indigo-700/60 text-indigo-300 px-3 py-1.5 rounded-lg items-center gap-1.5" title="Day 4 Autonomous Co-Producer Agent Active">
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -515,16 +515,24 @@ E|---------------------------------------------------------5-3-0----|
             <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
             🛡️ Human-in-the-Loop Vocal Checkpoint
           </span>
-          <span class="text-[10px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded font-mono">Token Verified</span>
+          <span class="text-[10px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded font-mono">4-Line Verse • Vibe-Matched</span>
         </div>
-        <p class="text-xs text-slate-300 mt-1.5">Review and edit the lyrics draft before authorizing voice synthesis:</p>
+        <p class="text-xs text-slate-300 mt-1.5">Review and edit the 4-line verse drafted to match the groove and instrumental vibe:</p>
         
         <div id="checkpoint-lyrics-preview" class="mt-2.5 max-h-36 overflow-y-auto rounded-lg bg-slate-950/80 p-3 text-xs space-y-1.5 font-mono border border-slate-800 text-slate-200">
           <!-- Populated dynamically with bar-by-bar lyrics -->
         </div>
 
-        <label for="checkpoint-lyrics-edit" class="block text-[11px] font-semibold text-slate-400 mt-2.5">Edit Lyrics Lines (one line per bar)</label>
-        <textarea id="checkpoint-lyrics-edit" rows="3" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400"></textarea>
+        <label for="checkpoint-lyrics-edit" class="block text-[11px] font-semibold text-slate-400 mt-2.5">Edit 4-Line Verse (exactly 4 lines, one line per bar)</label>
+        <textarea id="checkpoint-lyrics-edit" rows="4" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400"></textarea>
+
+        <div id="checkpoint-rights" class="mt-3 rounded-lg border border-slate-700 bg-slate-950/60 p-2.5 text-[11px] text-slate-300">
+          <p id="checkpoint-rights-msg"></p>
+          <label id="checkpoint-ack-row" class="hidden mt-2 flex items-start gap-2 cursor-pointer">
+            <input id="checkpoint-ack" type="checkbox" class="mt-0.5" />
+            <span>I understand rights are unassessed: no copyright clearance has been checked or granted for this audio.</span>
+          </label>
+        </div>
 
         <div class="mt-3 flex items-center justify-end gap-2">
           <button id="btn-cancel-vocals" type="button" class="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200">Keep Instrumental</button>
@@ -993,7 +1001,7 @@ E|---------------------------------------------------------5-3-0----|
   <!-- RIFFs WEB AUDIO ENGINE & INTERACTIVITY SCRIPT -->
   <script>
     // Embedded Initial Take 1 (Seed 1, Key Am, 110 BPM, Funky Neo-Soul)
-    var INITIAL_TAKE = {"id": 1, "payload": {"key": "Am", "bpm": 110, "groove": "straight", "chords": ["Am", "F", "C", "G"], "nashville_chart": ["1m", "b6", "b3", "b7"], "tab_score": "e|---0---|---1---|---0---|---3---|\nB|---1---|---1---|---1---|---0---|\nG|---2---|---2---|---0---|---0---|\nD|---2---|---3---|---2---|---0---|\nA|---0---|---3---|---3---|---2---|\nE|---x---|---1---|---x---|---3---|", "stems": [{"lane": "bass_guitar", "filename": "riff_Am_110bpm_bass_guitar.wav", "locked": false}, {"lane": "rhythm_guitar", "filename": "riff_Am_110bpm_rhythm_guitar.wav", "locked": false}, {"lane": "cymbals", "filename": "riff_Am_110bpm_cymbals.wav", "locked": false}], "license_certificate": {"license_id": null, "status": "not_issued", "reason": "No verified licensed sample provenance is configured."}, "seed": 1, "score": {"version": 1, "key": "Am", "beats_per_bar": 4, "loop_bars": 8, "seed": 1, "feel": {"tags": ["neo-soul"], "swing": 0.45}, "bars": [{"bar": 1, "chord": "Am"}, {"bar": 2, "chord": "Am"}, {"bar": 3, "chord": "F"}, {"bar": 4, "chord": "F"}, {"bar": 5, "chord": "C"}, {"bar": 6, "chord": "C"}, {"bar": 7, "chord": "G"}, {"bar": 8, "chord": "G"}], "lanes": [{"tier": "low", "instrument": "bass_guitar", "locked": false, "source": "generated", "hash": "00885da2c5880c60592ced1a29565b879294560c3ba2267099567b4daf0ac5c4", "events": [{"beat": 0, "dur": 1.5, "midi": 33, "vel": 94}, {"beat": 1.575, "dur": 0.5, "midi": 33, "vel": 76}, {"beat": 2, "dur": 1.5, "midi": 40, "vel": 85}, {"beat": 3.575, "dur": 0.5, "midi": 34, "vel": 75}, {"beat": 4, "dur": 1.5, "midi": 33, "vel": 89}, {"beat": 5.575, "dur": 0.5, "midi": 33, "vel": 72}, {"beat": 6, "dur": 1.5, "midi": 40, "vel": 85}, {"beat": 7.575, "dur": 0.5, "midi": 42, "vel": 67}, {"beat": 8, "dur": 0.75, "midi": 41, "vel": 92}, {"beat": 9.575, "dur": 0.5, "midi": 41, "vel": 72}, {"beat": 10.575, "dur": 0.75, "midi": 36, "vel": 83}, {"beat": 11.25, "dur": 0.5, "midi": 42, "vel": 71}, {"beat": 12, "dur": 2.5, "midi": 41, "vel": 89}, {"beat": 15, "dur": 0.5, "midi": 36, "vel": 74}, {"beat": 15.575, "dur": 0.5, "midi": 35, "vel": 68}, {"beat": 16, "dur": 0.75, "midi": 36, "vel": 95}, {"beat": 17.575, "dur": 0.5, "midi": 36, "vel": 72}, {"beat": 18.575, "dur": 0.75, "midi": 43, "vel": 81}, {"beat": 19.25, "dur": 0.5, "midi": 37, "vel": 72}, {"beat": 20, "dur": 1.5, "midi": 36, "vel": 92}, {"beat": 21.575, "dur": 0.5, "midi": 36, "vel": 72}, {"beat": 22, "dur": 1.5, "midi": 43, "vel": 84}, {"beat": 23.575, "dur": 0.5, "midi": 32, "vel": 70}, {"beat": 24, "dur": 0.75, "midi": 31, "vel": 95}, {"beat": 25.575, "dur": 0.5, "midi": 31, "vel": 72}, {"beat": 26.575, "dur": 0.75, "midi": 38, "vel": 86}, {"beat": 27.25, "dur": 0.5, "midi": 32, "vel": 69}, {"beat": 28, "dur": 0.75, "midi": 31, "vel": 96}, {"beat": 29.575, "dur": 0.5, "midi": 31, "vel": 66}, {"beat": 30.575, "dur": 0.75, "midi": 38, "vel": 85}, {"beat": 31.25, "dur": 0.5, "midi": 34, "vel": 64}]}, {"tier": "mid", "instrument": "rhythm_guitar", "locked": false, "source": "generated", "hash": "2b283f7cfbd331ff851843418ba745697e8b9ec427c59284a3af1f8cc72a632e", "events": [{"beat": 0.0, "dur": 1.5, "midi": 57, "vel": 90}, {"beat": 0.012, "dur": 1.5, "midi": 60, "vel": 86}, {"beat": 0.024, "dur": 1.5, "midi": 64, "vel": 83}, {"beat": 1.575, "dur": 1, "midi": 64, "vel": 71}, {"beat": 1.587, "dur": 1, "midi": 60, "vel": 73}, {"beat": 1.599, "dur": 1, "midi": 57, "vel": 69}, {"beat": 2.575, "dur": 0.5, "midi": 64, "vel": 60}, {"beat": 2.587, "dur": 0.5, "midi": 60, "vel": 61}, {"beat": 2.599, "dur": 0.5, "midi": 57, "vel": 63}, {"beat": 3.0, "dur": 1, "midi": 57, "vel": 79}, {"beat": 3.012, "dur": 1, "midi": 60, "vel": 80}, {"beat": 3.024, "dur": 1, "midi": 64, "vel": 78}, {"beat": 4.0, "dur": 0.5, "midi": 57, "vel": 79}, {"beat": 4.012, "dur": 0.5, "midi": 60, "vel": 77}, {"beat": 4.024, "dur": 0.5, "midi": 64, "vel": 80}, {"beat": 5.575, "dur": 0.5, "midi": 64, "vel": 74}, {"beat": 5.587, "dur": 0.5, "midi": 60, "vel": 72}, {"beat": 5.599, "dur": 0.5, "midi": 57, "vel": 70}, {"beat": 6.575, "dur": 0.5, "midi": 64, "vel": 76}, {"beat": 6.587, "dur": 0.5, "midi": 60, "vel": 73}, {"beat": 6.599, "dur": 0.5, "midi": 57, "vel": 77}, {"beat": 7.575, "dur": 0.5, "midi": 64, "vel": 73}, {"beat": 7.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 7.599, "dur": 0.5, "midi": 57, "vel": 68}, {"beat": 8.0, "dur": 1.5, "midi": 57, "vel": 88}, {"beat": 8.012, "dur": 1.5, "midi": 60, "vel": 85}, {"beat": 8.024, "dur": 1.5, "midi": 65, "vel": 87}, {"beat": 9.575, "dur": 1, "midi": 65, "vel": 77}, {"beat": 9.587, "dur": 1, "midi": 60, "vel": 70}, {"beat": 9.599, "dur": 1, "midi": 57, "vel": 70}, {"beat": 10.575, "dur": 0.5, "midi": 65, "vel": 61}, {"beat": 10.587, "dur": 0.5, "midi": 60, "vel": 64}, {"beat": 10.599, "dur": 0.5, "midi": 57, "vel": 57}, {"beat": 11.0, "dur": 1, "midi": 57, "vel": 77}, {"beat": 11.012, "dur": 1, "midi": 60, "vel": 77}, {"beat": 11.024, "dur": 1, "midi": 65, "vel": 78}, {"beat": 12.0, "dur": 0.5, "midi": 57, "vel": 84}, {"beat": 12.012, "dur": 0.5, "midi": 60, "vel": 80}, {"beat": 12.024, "dur": 0.5, "midi": 65, "vel": 80}, {"beat": 13.575, "dur": 0.5, "midi": 65, "vel": 81}, {"beat": 13.587, "dur": 0.5, "midi": 60, "vel": 76}, {"beat": 13.599, "dur": 0.5, "midi": 57, "vel": 74}, {"beat": 14.575, "dur": 0.5, "midi": 65, "vel": 80}, {"beat": 14.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 14.599, "dur": 0.5, "midi": 57, "vel": 72}, {"beat": 15.575, "dur": 0.5, "midi": 65, "vel": 73}, {"beat": 15.587, "dur": 0.5, "midi": 60, "vel": 64}, {"beat": 15.599, "dur": 0.5, "midi": 57, "vel": 63}, {"beat": 16.0, "dur": 2, "midi": 55, "vel": 89}, {"beat": 16.012, "dur": 2, "midi": 60, "vel": 85}, {"beat": 16.024, "dur": 2, "midi": 64, "vel": 82}, {"beat": 18.0, "dur": 2, "midi": 55, "vel": 81}, {"beat": 18.012, "dur": 2, "midi": 60, "vel": 77}, {"beat": 18.024, "dur": 2, "midi": 64, "vel": 77}, {"beat": 20.0, "dur": 0.5, "midi": 55, "vel": 83}, {"beat": 20.012, "dur": 0.5, "midi": 60, "vel": 83}, {"beat": 20.024, "dur": 0.5, "midi": 64, "vel": 77}, {"beat": 21.575, "dur": 0.5, "midi": 64, "vel": 75}, {"beat": 21.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 21.599, "dur": 0.5, "midi": 55, "vel": 77}, {"beat": 22.575, "dur": 0.5, "midi": 64, "vel": 77}, {"beat": 22.587, "dur": 0.5, "midi": 60, "vel": 78}, {"beat": 22.599, "dur": 0.5, "midi": 55, "vel": 76}, {"beat": 23.575, "dur": 0.5, "midi": 64, "vel": 73}, {"beat": 23.587, "dur": 0.5, "midi": 60, "vel": 72}, {"beat": 23.599, "dur": 0.5, "midi": 55, "vel": 70}, {"beat": 24.0, "dur": 2, "midi": 55, "vel": 82}, {"beat": 24.012, "dur": 2, "midi": 59, "vel": 79}, {"beat": 24.024, "dur": 2, "midi": 62, "vel": 83}, {"beat": 26.0, "dur": 2, "midi": 55, "vel": 77}, {"beat": 26.012, "dur": 2, "midi": 59, "vel": 74}, {"beat": 26.024, "dur": 2, "midi": 62, "vel": 75}, {"beat": 28.0, "dur": 1.5, "midi": 55, "vel": 83}, {"beat": 28.012, "dur": 1.5, "midi": 59, "vel": 81}, {"beat": 28.024, "dur": 1.5, "midi": 62, "vel": 80}, {"beat": 29.575, "dur": 1, "midi": 62, "vel": 79}, {"beat": 29.587, "dur": 1, "midi": 59, "vel": 77}, {"beat": 29.599, "dur": 1, "midi": 55, "vel": 69}, {"beat": 30.575, "dur": 0.5, "midi": 62, "vel": 66}, {"beat": 30.587, "dur": 0.5, "midi": 59, "vel": 66}, {"beat": 30.599, "dur": 0.5, "midi": 55, "vel": 65}, {"beat": 31.0, "dur": 1, "midi": 55, "vel": 75}, {"beat": 31.012, "dur": 1, "midi": 59, "vel": 80}, {"beat": 31.024, "dur": 1, "midi": 62, "vel": 76}]}, {"tier": "high", "instrument": "cymbals", "locked": false, "source": "generated", "hash": "d53fa5b02c90a5818dc8502b38f981d12da7d6943111a51110525b46b1540bdd", "events": [{"beat": 0.0, "dur": 2.0, "midi": 49, "vel": 89}, {"beat": 0, "dur": 1, "midi": 51, "vel": 82}, {"beat": 1, "dur": 1, "midi": 51, "vel": 70}, {"beat": 1.575, "dur": 0.5, "midi": 51, "vel": 53}, {"beat": 2, "dur": 1, "midi": 51, "vel": 78}, {"beat": 3, "dur": 1, "midi": 51, "vel": 69}, {"beat": 3.575, "dur": 0.5, "midi": 51, "vel": 58}, {"beat": 4, "dur": 1, "midi": 51, "vel": 76}, {"beat": 5, "dur": 1, "midi": 51, "vel": 77}, {"beat": 5.575, "dur": 0.5, "midi": 51, "vel": 52}, {"beat": 6, "dur": 1, "midi": 51, "vel": 80}, {"beat": 7, "dur": 1, "midi": 51, "vel": 77}, {"beat": 7.575, "dur": 0.5, "midi": 51, "vel": 54}, {"beat": 8, "dur": 1, "midi": 51, "vel": 83}, {"beat": 9, "dur": 1, "midi": 51, "vel": 72}, {"beat": 9.575, "dur": 0.5, "midi": 51, "vel": 57}, {"beat": 10, "dur": 1, "midi": 51, "vel": 81}, {"beat": 11, "dur": 1, "midi": 51, "vel": 72}, {"beat": 11.575, "dur": 0.5, "midi": 51, "vel": 56}, {"beat": 12, "dur": 1, "midi": 51, "vel": 83}, {"beat": 13, "dur": 1, "midi": 51, "vel": 69}, {"beat": 13.575, "dur": 0.5, "midi": 51, "vel": 60}, {"beat": 14, "dur": 1, "midi": 51, "vel": 81}, {"beat": 15, "dur": 1, "midi": 51, "vel": 76}, {"beat": 15.575, "dur": 0.5, "midi": 51, "vel": 53}, {"beat": 16, "dur": 1, "midi": 51, "vel": 79}, {"beat": 17, "dur": 1, "midi": 51, "vel": 71}, {"beat": 17.575, "dur": 0.5, "midi": 51, "vel": 59}, {"beat": 18, "dur": 1, "midi": 51, "vel": 80}, {"beat": 19, "dur": 1, "midi": 51, "vel": 77}, {"beat": 19.575, "dur": 0.5, "midi": 51, "vel": 55}, {"beat": 20, "dur": 1, "midi": 51, "vel": 83}, {"beat": 21, "dur": 1, "midi": 51, "vel": 67}, {"beat": 21.575, "dur": 0.5, "midi": 51, "vel": 57}, {"beat": 22, "dur": 1, "midi": 51, "vel": 84}, {"beat": 23, "dur": 1, "midi": 51, "vel": 77}, {"beat": 23.575, "dur": 0.5, "midi": 51, "vel": 59}, {"beat": 24, "dur": 1, "midi": 51, "vel": 81}, {"beat": 25, "dur": 1, "midi": 51, "vel": 70}, {"beat": 25.575, "dur": 0.5, "midi": 51, "vel": 60}, {"beat": 26, "dur": 1, "midi": 51, "vel": 74}, {"beat": 27, "dur": 1, "midi": 51, "vel": 77}, {"beat": 27.575, "dur": 0.5, "midi": 51, "vel": 56}, {"beat": 28, "dur": 1, "midi": 51, "vel": 81}, {"beat": 29, "dur": 1, "midi": 51, "vel": 70}, {"beat": 29.575, "dur": 0.5, "midi": 51, "vel": 52}, {"beat": 30, "dur": 1, "midi": 51, "vel": 75}, {"beat": 31, "dur": 1, "midi": 51, "vel": 73}, {"beat": 31.575, "dur": 0.5, "midi": 51, "vel": 57}]}], "warnings": []}}};
+    var INITIAL_TAKE = {"id": 1, "payload": {"key": "Am", "bpm": 110, "groove": "straight", "chords": ["Am", "F", "C", "G"], "nashville_chart": ["1m", "b6", "b3", "b7"], "tab_score": "e|---0---|---1---|---0---|---3---|\nB|---1---|---1---|---1---|---0---|\nG|---2---|---2---|---0---|---0---|\nD|---2---|---3---|---2---|---0---|\nA|---0---|---3---|---3---|---2---|\nE|---x---|---1---|---x---|---3---|", "stems": [{"lane": "bass_guitar", "filename": "riff_Am_110bpm_bass_guitar.wav", "locked": false}, {"lane": "rhythm_guitar", "filename": "riff_Am_110bpm_rhythm_guitar.wav", "locked": false}, {"lane": "cymbals", "filename": "riff_Am_110bpm_cymbals.wav", "locked": false}], "license_certificate": {"license_id": null, "status": "not_issued", "rights_grant": false}, "seed": 1, "score": {"version": 1, "key": "Am", "beats_per_bar": 4, "loop_bars": 8, "seed": 1, "feel": {"tags": ["neo-soul"], "swing": 0.45}, "bars": [{"bar": 1, "chord": "Am"}, {"bar": 2, "chord": "Am"}, {"bar": 3, "chord": "F"}, {"bar": 4, "chord": "F"}, {"bar": 5, "chord": "C"}, {"bar": 6, "chord": "C"}, {"bar": 7, "chord": "G"}, {"bar": 8, "chord": "G"}], "lanes": [{"tier": "low", "instrument": "bass_guitar", "locked": false, "source": "generated", "hash": "00885da2c5880c60592ced1a29565b879294560c3ba2267099567b4daf0ac5c4", "events": [{"beat": 0, "dur": 1.5, "midi": 33, "vel": 94}, {"beat": 1.575, "dur": 0.5, "midi": 33, "vel": 76}, {"beat": 2, "dur": 1.5, "midi": 40, "vel": 85}, {"beat": 3.575, "dur": 0.5, "midi": 34, "vel": 75}, {"beat": 4, "dur": 1.5, "midi": 33, "vel": 89}, {"beat": 5.575, "dur": 0.5, "midi": 33, "vel": 72}, {"beat": 6, "dur": 1.5, "midi": 40, "vel": 85}, {"beat": 7.575, "dur": 0.5, "midi": 42, "vel": 67}, {"beat": 8, "dur": 0.75, "midi": 41, "vel": 92}, {"beat": 9.575, "dur": 0.5, "midi": 41, "vel": 72}, {"beat": 10.575, "dur": 0.75, "midi": 36, "vel": 83}, {"beat": 11.25, "dur": 0.5, "midi": 42, "vel": 71}, {"beat": 12, "dur": 2.5, "midi": 41, "vel": 89}, {"beat": 15, "dur": 0.5, "midi": 36, "vel": 74}, {"beat": 15.575, "dur": 0.5, "midi": 35, "vel": 68}, {"beat": 16, "dur": 0.75, "midi": 36, "vel": 95}, {"beat": 17.575, "dur": 0.5, "midi": 36, "vel": 72}, {"beat": 18.575, "dur": 0.75, "midi": 43, "vel": 81}, {"beat": 19.25, "dur": 0.5, "midi": 37, "vel": 72}, {"beat": 20, "dur": 1.5, "midi": 36, "vel": 92}, {"beat": 21.575, "dur": 0.5, "midi": 36, "vel": 72}, {"beat": 22, "dur": 1.5, "midi": 43, "vel": 84}, {"beat": 23.575, "dur": 0.5, "midi": 32, "vel": 70}, {"beat": 24, "dur": 0.75, "midi": 31, "vel": 95}, {"beat": 25.575, "dur": 0.5, "midi": 31, "vel": 72}, {"beat": 26.575, "dur": 0.75, "midi": 38, "vel": 86}, {"beat": 27.25, "dur": 0.5, "midi": 32, "vel": 69}, {"beat": 28, "dur": 0.75, "midi": 31, "vel": 96}, {"beat": 29.575, "dur": 0.5, "midi": 31, "vel": 66}, {"beat": 30.575, "dur": 0.75, "midi": 38, "vel": 85}, {"beat": 31.25, "dur": 0.5, "midi": 34, "vel": 64}]}, {"tier": "mid", "instrument": "rhythm_guitar", "locked": false, "source": "generated", "hash": "2b283f7cfbd331ff851843418ba745697e8b9ec427c59284a3af1f8cc72a632e", "events": [{"beat": 0.0, "dur": 1.5, "midi": 57, "vel": 90}, {"beat": 0.012, "dur": 1.5, "midi": 60, "vel": 86}, {"beat": 0.024, "dur": 1.5, "midi": 64, "vel": 83}, {"beat": 1.575, "dur": 1, "midi": 64, "vel": 71}, {"beat": 1.587, "dur": 1, "midi": 60, "vel": 73}, {"beat": 1.599, "dur": 1, "midi": 57, "vel": 69}, {"beat": 2.575, "dur": 0.5, "midi": 64, "vel": 60}, {"beat": 2.587, "dur": 0.5, "midi": 60, "vel": 61}, {"beat": 2.599, "dur": 0.5, "midi": 57, "vel": 63}, {"beat": 3.0, "dur": 1, "midi": 57, "vel": 79}, {"beat": 3.012, "dur": 1, "midi": 60, "vel": 80}, {"beat": 3.024, "dur": 1, "midi": 64, "vel": 78}, {"beat": 4.0, "dur": 0.5, "midi": 57, "vel": 79}, {"beat": 4.012, "dur": 0.5, "midi": 60, "vel": 77}, {"beat": 4.024, "dur": 0.5, "midi": 64, "vel": 80}, {"beat": 5.575, "dur": 0.5, "midi": 64, "vel": 74}, {"beat": 5.587, "dur": 0.5, "midi": 60, "vel": 72}, {"beat": 5.599, "dur": 0.5, "midi": 57, "vel": 70}, {"beat": 6.575, "dur": 0.5, "midi": 64, "vel": 76}, {"beat": 6.587, "dur": 0.5, "midi": 60, "vel": 73}, {"beat": 6.599, "dur": 0.5, "midi": 57, "vel": 77}, {"beat": 7.575, "dur": 0.5, "midi": 64, "vel": 73}, {"beat": 7.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 7.599, "dur": 0.5, "midi": 57, "vel": 68}, {"beat": 8.0, "dur": 1.5, "midi": 57, "vel": 88}, {"beat": 8.012, "dur": 1.5, "midi": 60, "vel": 85}, {"beat": 8.024, "dur": 1.5, "midi": 65, "vel": 87}, {"beat": 9.575, "dur": 1, "midi": 65, "vel": 77}, {"beat": 9.587, "dur": 1, "midi": 60, "vel": 70}, {"beat": 9.599, "dur": 1, "midi": 57, "vel": 70}, {"beat": 10.575, "dur": 0.5, "midi": 65, "vel": 61}, {"beat": 10.587, "dur": 0.5, "midi": 60, "vel": 64}, {"beat": 10.599, "dur": 0.5, "midi": 57, "vel": 57}, {"beat": 11.0, "dur": 1, "midi": 57, "vel": 77}, {"beat": 11.012, "dur": 1, "midi": 60, "vel": 77}, {"beat": 11.024, "dur": 1, "midi": 65, "vel": 78}, {"beat": 12.0, "dur": 0.5, "midi": 57, "vel": 84}, {"beat": 12.012, "dur": 0.5, "midi": 60, "vel": 80}, {"beat": 12.024, "dur": 0.5, "midi": 65, "vel": 80}, {"beat": 13.575, "dur": 0.5, "midi": 65, "vel": 81}, {"beat": 13.587, "dur": 0.5, "midi": 60, "vel": 76}, {"beat": 13.599, "dur": 0.5, "midi": 57, "vel": 74}, {"beat": 14.575, "dur": 0.5, "midi": 65, "vel": 80}, {"beat": 14.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 14.599, "dur": 0.5, "midi": 57, "vel": 72}, {"beat": 15.575, "dur": 0.5, "midi": 65, "vel": 73}, {"beat": 15.587, "dur": 0.5, "midi": 60, "vel": 64}, {"beat": 15.599, "dur": 0.5, "midi": 57, "vel": 63}, {"beat": 16.0, "dur": 2, "midi": 55, "vel": 89}, {"beat": 16.012, "dur": 2, "midi": 60, "vel": 85}, {"beat": 16.024, "dur": 2, "midi": 64, "vel": 82}, {"beat": 18.0, "dur": 2, "midi": 55, "vel": 81}, {"beat": 18.012, "dur": 2, "midi": 60, "vel": 77}, {"beat": 18.024, "dur": 2, "midi": 64, "vel": 77}, {"beat": 20.0, "dur": 0.5, "midi": 55, "vel": 83}, {"beat": 20.012, "dur": 0.5, "midi": 60, "vel": 83}, {"beat": 20.024, "dur": 0.5, "midi": 64, "vel": 77}, {"beat": 21.575, "dur": 0.5, "midi": 64, "vel": 75}, {"beat": 21.587, "dur": 0.5, "midi": 60, "vel": 71}, {"beat": 21.599, "dur": 0.5, "midi": 55, "vel": 77}, {"beat": 22.575, "dur": 0.5, "midi": 64, "vel": 77}, {"beat": 22.587, "dur": 0.5, "midi": 60, "vel": 78}, {"beat": 22.599, "dur": 0.5, "midi": 55, "vel": 76}, {"beat": 23.575, "dur": 0.5, "midi": 64, "vel": 73}, {"beat": 23.587, "dur": 0.5, "midi": 60, "vel": 72}, {"beat": 23.599, "dur": 0.5, "midi": 55, "vel": 70}, {"beat": 24.0, "dur": 2, "midi": 55, "vel": 82}, {"beat": 24.012, "dur": 2, "midi": 59, "vel": 79}, {"beat": 24.024, "dur": 2, "midi": 62, "vel": 83}, {"beat": 26.0, "dur": 2, "midi": 55, "vel": 77}, {"beat": 26.012, "dur": 2, "midi": 59, "vel": 74}, {"beat": 26.024, "dur": 2, "midi": 62, "vel": 75}, {"beat": 28.0, "dur": 1.5, "midi": 55, "vel": 83}, {"beat": 28.012, "dur": 1.5, "midi": 59, "vel": 81}, {"beat": 28.024, "dur": 1.5, "midi": 62, "vel": 80}, {"beat": 29.575, "dur": 1, "midi": 62, "vel": 79}, {"beat": 29.587, "dur": 1, "midi": 59, "vel": 77}, {"beat": 29.599, "dur": 1, "midi": 55, "vel": 69}, {"beat": 30.575, "dur": 0.5, "midi": 62, "vel": 66}, {"beat": 30.587, "dur": 0.5, "midi": 59, "vel": 66}, {"beat": 30.599, "dur": 0.5, "midi": 55, "vel": 65}, {"beat": 31.0, "dur": 1, "midi": 55, "vel": 75}, {"beat": 31.012, "dur": 1, "midi": 59, "vel": 80}, {"beat": 31.024, "dur": 1, "midi": 62, "vel": 76}]}, {"tier": "high", "instrument": "cymbals", "locked": false, "source": "generated", "hash": "d53fa5b02c90a5818dc8502b38f981d12da7d6943111a51110525b46b1540bdd", "events": [{"beat": 0.0, "dur": 2.0, "midi": 49, "vel": 89}, {"beat": 0, "dur": 1, "midi": 51, "vel": 82}, {"beat": 1, "dur": 1, "midi": 51, "vel": 70}, {"beat": 1.575, "dur": 0.5, "midi": 51, "vel": 53}, {"beat": 2, "dur": 1, "midi": 51, "vel": 78}, {"beat": 3, "dur": 1, "midi": 51, "vel": 69}, {"beat": 3.575, "dur": 0.5, "midi": 51, "vel": 58}, {"beat": 4, "dur": 1, "midi": 51, "vel": 76}, {"beat": 5, "dur": 1, "midi": 51, "vel": 77}, {"beat": 5.575, "dur": 0.5, "midi": 51, "vel": 52}, {"beat": 6, "dur": 1, "midi": 51, "vel": 80}, {"beat": 7, "dur": 1, "midi": 51, "vel": 77}, {"beat": 7.575, "dur": 0.5, "midi": 51, "vel": 54}, {"beat": 8, "dur": 1, "midi": 51, "vel": 83}, {"beat": 9, "dur": 1, "midi": 51, "vel": 72}, {"beat": 9.575, "dur": 0.5, "midi": 51, "vel": 57}, {"beat": 10, "dur": 1, "midi": 51, "vel": 81}, {"beat": 11, "dur": 1, "midi": 51, "vel": 72}, {"beat": 11.575, "dur": 0.5, "midi": 51, "vel": 56}, {"beat": 12, "dur": 1, "midi": 51, "vel": 83}, {"beat": 13, "dur": 1, "midi": 51, "vel": 69}, {"beat": 13.575, "dur": 0.5, "midi": 51, "vel": 60}, {"beat": 14, "dur": 1, "midi": 51, "vel": 81}, {"beat": 15, "dur": 1, "midi": 51, "vel": 76}, {"beat": 15.575, "dur": 0.5, "midi": 51, "vel": 53}, {"beat": 16, "dur": 1, "midi": 51, "vel": 79}, {"beat": 17, "dur": 1, "midi": 51, "vel": 71}, {"beat": 17.575, "dur": 0.5, "midi": 51, "vel": 59}, {"beat": 18, "dur": 1, "midi": 51, "vel": 80}, {"beat": 19, "dur": 1, "midi": 51, "vel": 77}, {"beat": 19.575, "dur": 0.5, "midi": 51, "vel": 55}, {"beat": 20, "dur": 1, "midi": 51, "vel": 83}, {"beat": 21, "dur": 1, "midi": 51, "vel": 67}, {"beat": 21.575, "dur": 0.5, "midi": 51, "vel": 57}, {"beat": 22, "dur": 1, "midi": 51, "vel": 84}, {"beat": 23, "dur": 1, "midi": 51, "vel": 77}, {"beat": 23.575, "dur": 0.5, "midi": 51, "vel": 59}, {"beat": 24, "dur": 1, "midi": 51, "vel": 81}, {"beat": 25, "dur": 1, "midi": 51, "vel": 70}, {"beat": 25.575, "dur": 0.5, "midi": 51, "vel": 60}, {"beat": 26, "dur": 1, "midi": 51, "vel": 74}, {"beat": 27, "dur": 1, "midi": 51, "vel": 77}, {"beat": 27.575, "dur": 0.5, "midi": 51, "vel": 56}, {"beat": 28, "dur": 1, "midi": 51, "vel": 81}, {"beat": 29, "dur": 1, "midi": 51, "vel": 70}, {"beat": 29.575, "dur": 0.5, "midi": 51, "vel": 52}, {"beat": 30, "dur": 1, "midi": 51, "vel": 75}, {"beat": 31, "dur": 1, "midi": 51, "vel": 73}, {"beat": 31.575, "dur": 0.5, "midi": 51, "vel": 57}]}], "warnings": []}}};
 
     // =====================================================================
     // STATE MACHINE & CORE DEFINITIONS
@@ -1635,9 +1643,29 @@ E|---------------------------------------------------------5-3-0----|
     let lastFocus = null;
     let pendingVocalData = null;
 
+    function renderCheckpointRights(d) {
+      const msg = $('checkpoint-rights-msg');
+      const ackRow = $('checkpoint-ack-row');
+      const ack = $('checkpoint-ack');
+      const btnApprove = $('btn-approve-vocals');
+      const status = (d && d.rights_status) || 'unassessed';
+      if (ack) ack.checked = false;
+      if (ackRow) ackRow.classList.toggle('hidden', status !== 'unassessed');
+      if (btnApprove) btnApprove.disabled = status === 'possible_match';
+      if (!msg) return;
+      if (status === 'possible_match') {
+        msg.textContent = 'Rights check: a possible melodic match was found. Voice synthesis is blocked for this take. Change the groove or instruments and generate again.';
+      } else if (status === 'clean') {
+        msg.textContent = 'Rights check: no melodic match found in the configured reference corpus. This is not a copyright clearance.';
+      } else {
+        msg.textContent = 'Rights check: not assessed. No reference corpus is configured, so no clearance exists for this audio.';
+      }
+    }
+
     function resetVocalCheckpoint() {
       if ($('vocal-checkpoint-card')) $('vocal-checkpoint-card').classList.add('hidden');
       if ($('modal-default-footer')) $('modal-default-footer').classList.remove('hidden');
+      if ($('checkpoint-ack')) $('checkpoint-ack').checked = false;
       const btnApprove = $('btn-approve-vocals');
       if (btnApprove) {
         btnApprove.disabled = false;
@@ -1847,6 +1875,7 @@ E|---------------------------------------------------------5-3-0----|
           });
           if ($('checkpoint-lyrics-preview')) $('checkpoint-lyrics-preview').innerHTML = previewHtml;
           if ($('checkpoint-lyrics-edit')) $('checkpoint-lyrics-edit').value = bars.map(b => b.text || b.lyric || '').join('\n');
+          renderCheckpointRights(d);
           return;
         }
 
@@ -1927,17 +1956,60 @@ E|---------------------------------------------------------5-3-0----|
         btnApprove.innerHTML = '✨ Synthesizing Vocal Voice…';
 
         const rawEdited = ($('checkpoint-lyrics-edit') ? $('checkpoint-lyrics-edit').value : '').trim();
-        const editedLines = rawEdited ? rawEdited.split('\n').map(l => l.trim()).filter(Boolean) : null;
-        const { token, takeData, payload } = pendingVocalData;
+        const editedLines = rawEdited ? rawEdited.split('\n').map(l => l.trim()).filter(Boolean) : [];
+        let { token, takeData, payload } = pendingVocalData;
+
+        const failApprove = (msg) => {
+          modalError.textContent = msg;
+          modalError.classList.remove('hidden');
+          btnApprove.disabled = false;
+          btnApprove.innerHTML = '✨ Approve &amp; Synthesize Voice';
+        };
+
+        if (!editedLines.length) { failApprove('Enter the final verse (one line per bar) before approving.'); return; }
+        const ackBox = $('checkpoint-ack');
+        const needsAck = (takeData.rights_status || 'unassessed') === 'unassessed';
+        if (needsAck && !(ackBox && ackBox.checked)) {
+          failApprove('Please acknowledge that rights are unassessed before approving.');
+          return;
+        }
 
         try {
+          // The token is bound to the exact lyrics shown at the checkpoint. If the human edited
+          // them, re-run the checkpoint so the server issues a token for the edited text.
+          const draftLines = ((takeData.lyrics_draft && takeData.lyrics_draft.bars) || []).map(b => (b.text || b.lyric || '').trim());
+          if (JSON.stringify(draftLines) !== JSON.stringify(editedLines)) {
+            const recheck = await fetch('/api/generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...payload, edited_lyrics: editedLines, vocal_approved: false }),
+            });
+            if (!recheck.ok) {
+              let msg = 'Could not validate the edited lyrics. Please try again.';
+              try { const j = await recheck.json(); if (j && j.detail) msg = j.detail; } catch (_) {}
+              failApprove(msg);
+              return;
+            }
+            const rj = await recheck.json();
+            const nd = (rj && rj.data) || {};
+            if (nd.status !== 'awaiting_vocal_confirmation' || !nd.vocal_confirmation_token) {
+              failApprove('Could not validate the edited lyrics. Please try again.');
+              return;
+            }
+            token = nd.vocal_confirmation_token;
+            takeData = nd;
+            pendingVocalData = { token, takeData: nd, payload };
+            if (nd.rights_status === 'possible_match') {
+              renderCheckpointRights(nd);
+              failApprove('A possible melodic match was found. Voice synthesis is blocked for this take.');
+              return;
+            }
+          }
+
           const approvePayload = {
             token: token,
-            prompt: payload.prompt,
-            previous_score: payload.previous_score,
-            locked_parts: payload.locked_parts,
-            lyrics_draft: (takeData.lyrics_draft && takeData.lyrics_draft.bars) || [],
             vocal_trace_id: takeData.vocal_trace_id,
+            prompt: payload.prompt || (takeData && takeData.prompt) || 'Accompaniment with lead vocal track',
             lyrics_prompt: takeData.lyrics_prompt || payload.lyrics_prompt || 'Vocal song sketch',
             key: takeData.key || payload.key || 'Am',
             bpm: takeData.bpm || payload.bpm || 110,
@@ -1948,6 +2020,7 @@ E|---------------------------------------------------------5-3-0----|
             vocal_style: takeData.vocal_style || payload.vocal_style || 'soulful_lead',
             lyrics_language: takeData.lyrics_language || payload.lyrics_language || 'en',
             edited_lyrics: editedLines,
+            acknowledge_unassessed_rights: !!(ackBox && ackBox.checked),
           };
 
           const res = await fetch('/api/vocals/approve', {
@@ -1968,17 +2041,6 @@ E|---------------------------------------------------------5-3-0----|
 
           const json = await res.json();
           const d = (json && json.data) || {};
-          if (d.status === 'awaiting_vocal_confirmation') {
-            pendingVocalData.token = d.vocal_confirmation_token;
-            pendingVocalData.takeData = d;
-            const revisedBars = (d.lyrics_draft && d.lyrics_draft.bars) || [];
-            if ($('checkpoint-lyrics-edit')) $('checkpoint-lyrics-edit').value = revisedBars.map(b => b.text || b.lyric || '').join('\n');
-            modalError.textContent = 'Your edits changed the draft. Review the revised lyrics and approve again to continue.';
-            modalError.classList.remove('hidden');
-            btnApprove.disabled = false;
-            btnApprove.innerHTML = '✨ Approve &amp; Synthesize Voice';
-            return;
-          }
           const nextSeed = state.takes.length + 1;
           const newTakeData = {
             key: d.key || payload.key,

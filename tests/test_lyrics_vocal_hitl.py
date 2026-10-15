@@ -72,13 +72,15 @@ class TestLyricsVocalHITL(unittest.TestCase):
 
     def _approve(self, checkpoint, *, edited=None, **kwargs):
         request = self._request(**kwargs)
+        reviewed_lyrics = edited if edited is not None else checkpoint["lyrics_draft"]["bars"]
         result = self.agent.generate(
             **request,
             vocal_approved=True,
             vocal_approval_token=checkpoint["vocal_confirmation_token"],
             lyrics_draft=checkpoint["lyrics_draft"]["bars"],
-            edited_lyrics=edited,
+            edited_lyrics=reviewed_lyrics,
             vocal_trace_id=checkpoint["vocal_trace_id"],
+            acknowledge_unassessed_rights=True,
         )
         if result["status"] == "awaiting_vocal_confirmation":
             result = self.agent.generate(
@@ -88,6 +90,7 @@ class TestLyricsVocalHITL(unittest.TestCase):
                 lyrics_draft=result["lyrics_draft"]["bars"],
                 edited_lyrics=result["lyrics_draft"]["bars"],
                 vocal_trace_id=result["vocal_trace_id"],
+                acknowledge_unassessed_rights=True,
             )
         return result
 
@@ -155,6 +158,7 @@ class TestLyricsVocalHITL(unittest.TestCase):
             lyrics_draft=checkpoint["lyrics_draft"]["bars"],
             edited_lyrics=edited,
             vocal_trace_id=checkpoint["vocal_trace_id"],
+            acknowledge_unassessed_rights=True,
         )
         self.assertEqual(first_approval["status"], "awaiting_vocal_confirmation")
         self.assertFalse(any(stem["lane"] == "vocal_lead" for stem in first_approval["stems"]))
@@ -165,6 +169,7 @@ class TestLyricsVocalHITL(unittest.TestCase):
             lyrics_draft=first_approval["lyrics_draft"]["bars"],
             edited_lyrics=first_approval["lyrics_draft"]["bars"],
             vocal_trace_id=first_approval["vocal_trace_id"],
+            acknowledge_unassessed_rights=True,
         )
         self.assertEqual(approved["status"], "success")
         self.assertEqual(approved["lyrics"][0]["text"], edited[0]["text"])
@@ -208,6 +213,7 @@ class TestLyricsVocalHITL(unittest.TestCase):
             lyrics_draft=checkpoint["lyrics_draft"]["bars"],
             edited_lyrics=checkpoint["lyrics_draft"]["bars"],
             vocal_trace_id=checkpoint["vocal_trace_id"],
+            acknowledge_unassessed_rights=True,
         )
         next_lane = next(lane for lane in approved["score"]["lanes"] if lane["instrument"] == "vocal_lead")
         self.assertTrue(next_lane["locked"])

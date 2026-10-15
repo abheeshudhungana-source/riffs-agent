@@ -40,6 +40,10 @@ Thumbs.db
 # Scratch and outputs
 scratch/
 outputs/
+.riffs_takes/
+.riffs-agent/
+.riffs_traces/
+riffs_trash/
 *.wav
 *.mp3
 *.mp4

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import uuid
 import base64
 import binascii
 import hashlib
@@ -18,7 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from riffs_api.progression import ProgressionError
 from riffs_api.routes import router as riff_routes
 from riffs_api.prompt_guardrails import PromptRefusal
-from riffs_api.vocal_approval import VocalApprovalError, VocalApprovalUnavailable, VocalInputError
 from riffs_api import storage
 
 
@@ -35,46 +33,31 @@ def verify_token(token: str) -> dict | None:
     audience = os.getenv("RIFFS_JWT_AUDIENCE", "")
     if len(secret.encode("utf-8")) < 32 or not issuer or not audience:
         return None
-
     try:
         header_segment, claims_segment, signature_segment = token.split(".")
         header = json.loads(_decode_jwt_segment(header_segment))
         claims = json.loads(_decode_jwt_segment(claims_segment))
-        if (
-            not isinstance(header, dict)
-            or header.get("alg") != "HS256"
-            or header.get("typ") not in (None, "JWT")
-            or set(header) - {"alg", "typ"}
-        ):
+        if (not isinstance(header, dict) or header.get("alg") != "HS256"
+                or header.get("typ") not in (None, "JWT") or set(header) - {"alg", "typ"}):
             return None
         if not isinstance(claims, dict):
             return None
-
         signed = f"{header_segment}.{claims_segment}".encode("ascii")
         expected = hmac.new(secret.encode("utf-8"), signed, hashlib.sha256).digest()
         if not hmac.compare_digest(expected, _decode_jwt_segment(signature_segment)):
             return None
-
         now = time.time()
-        if (
-            isinstance(claims.get("exp"), bool)
-            or not isinstance(claims.get("exp"), (int, float))
-            or not math.isfinite(claims["exp"])
-            or claims["exp"] <= now
-        ):
+        exp = claims.get("exp")
+        if isinstance(exp, bool) or not isinstance(exp, (int, float)) or not math.isfinite(exp) or exp <= now:
             return None
-        if claims.get("nbf") is not None:
-            if (
-                isinstance(claims["nbf"], bool)
-                or not isinstance(claims["nbf"], (int, float))
-                or not math.isfinite(claims["nbf"])
-                or claims["nbf"] > now
-            ):
-                return None
+        nbf = claims.get("nbf")
+        if nbf is not None and (isinstance(nbf, bool) or not isinstance(nbf, (int, float))
+                                or not math.isfinite(nbf) or nbf > now):
+            return None
         if claims.get("iss") != issuer:
             return None
-        claim_audience = claims.get("aud")
-        if audience not in (claim_audience if isinstance(claim_audience, list) else [claim_audience]):
+        claim_aud = claims.get("aud")
+        if audience not in (claim_aud if isinstance(claim_aud, list) else [claim_aud]):
             return None
         if not isinstance(claims.get("sub"), str) or not claims["sub"].strip():
             return None
@@ -92,6 +75,8 @@ local count = redis.call('INCR', KEYS[1])
 if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
 return count
 """
+
+
 def increment_generation_count(user: str, now: float | None = None) -> int:
     now = time.time() if now is None else now
     window = int(now // RATE_WINDOW_SECONDS)
@@ -103,33 +88,20 @@ def increment_generation_count(user: str, now: float | None = None) -> int:
 def require_generation(authorization: str | None = Header(default=None)) -> str:
     scheme, _, token = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or not token.strip():
-        raise HTTPException(
-            status_code=401,
-            detail="Valid bearer token required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(401, "Valid bearer token required", headers={"WWW-Authenticate": "Bearer"})
     claims = verify_token(token.strip())
     if not claims:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(401, "Invalid or expired token", headers={"WWW-Authenticate": "Bearer"})
     if "beta_tester" not in claims.get("roles", []) or "generation" not in claims.get("entitlements", []):
-        raise HTTPException(status_code=403, detail="Generation entitlement required")
-
+        raise HTTPException(403, "Generation entitlement required")
     now = time.time()
     try:
         count = increment_generation_count(claims["sub"], now)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail="Rate-limit service unavailable") from exc
+        raise HTTPException(503, "Rate-limit service unavailable") from exc
     if count > RATE_LIMIT:
         retry_after = max(1, RATE_WINDOW_SECONDS - int(now % RATE_WINDOW_SECONDS))
-        raise HTTPException(
-            status_code=429,
-            detail="Rate limit exceeded",
-            headers={"Retry-After": str(retry_after)},
-        )
+        raise HTTPException(429, "Rate limit exceeded", headers={"Retry-After": str(retry_after)})
     return claims["sub"]
 
 
@@ -137,10 +109,14 @@ generation_router = APIRouter(dependencies=[Depends(require_generation)])
 
 # Import the RIFFs agent harness
 try:
-    from agent import RiffsAgent
+    from agent import RiffsAgent, VocalApprovalError
     agent = RiffsAgent()
 except Exception as e:
     agent = None
+
+    class VocalApprovalError(ValueError):  # placeholder so error mapping still imports
+        code = "TOKEN_INVALID"
+
     print(f"Warning: could not initialize RiffsAgent: {e}")
 
 app = FastAPI(
@@ -181,15 +157,15 @@ class GenerateRequest(BaseModel):
     seed: Optional[int] = None
     previous_score: Optional[Dict[str, Any]] = None
     base_take_id: Optional[int] = None
-    groove: Literal["straight", "half_time", "swing"] = "straight"
+    base_storage_id: Optional[str] = None
+    groove: Optional[Literal["straight", "half_time", "swing", "half_time_shuffle"]] = None
     lyrics_prompt: Optional[str] = None
     lyrics_language: Optional[str] = "en"
     vocal_style: Optional[str] = "soulful_lead"
     vocal_approved: Optional[bool] = False
     vocal_approval_token: Optional[str] = None
     edited_lyrics: Optional[Union[List[str], List[Dict[str, Any]]]] = None
-    lyrics_draft: Optional[List[Dict[str, Any]]] = None
-    vocal_trace_id: Optional[str] = None
+    acknowledge_unassessed_rights: Optional[bool] = False
 
 
 ALLOWED_INSTRUMENTS = {
@@ -207,6 +183,8 @@ LOCK_ALIASES = {
     "rhythm": {"rhythm_guitar", "acoustic_piano", "ukulele"},
     "lead": {"tenor_sax", "piccolo"},
     "drums": {"bass_drums", "floor_tom", "bongos", "cymbals", "drum_kit", "triangle"},
+    "vocal": {"vocal_lead"},
+    "vocal_lead": {"vocal_lead"},
 }
 
 @generation_router.post("/api/generate")
@@ -256,21 +234,21 @@ async def generate_riff(req: GenerateRequest):
         )
 
     requested_locks = req.locked_parts or []
+    has_vocal_context = bool(
+        req.lyrics_prompt
+        or req.vocal_approved
+        or (req.previous_score and "vocal_lead" in (req.previous_score.get("part_scores") or {}))
+    )
     unmatched_locks = [
         lock for lock in requested_locks
-        if not any(
-            lock.lower() == instrument.lower()
-            or lock.lower() in instrument.lower()
-            or instrument.lower() in LOCK_ALIASES.get(lock.lower(), set())
-            or (
-                lock.lower() == "vocal_lead"
-                and bool(req.lyrics_prompt)
-                and any(
-                    isinstance(lane, dict) and lane.get("instrument") == "vocal_lead"
-                    for lane in (req.previous_score or {}).get("lanes", [])
-                )
+        if not (
+            (lock.lower() in ("vocal", "vocal_lead") and has_vocal_context)
+            or any(
+                lock.lower() == instrument.lower()
+                or lock.lower() in instrument.lower()
+                or instrument.lower() in LOCK_ALIASES.get(lock.lower(), set())
+                for instrument in instruments
             )
-            for instrument in instruments
         )
     ]
     if unmatched_locks:
@@ -310,7 +288,7 @@ async def generate_riff(req: GenerateRequest):
             }
         )
 
-    if req.base_take_id is not None and not any(
+    if req.base_take_id is not None and req.previous_score is None and req.base_storage_id is None and not any(
         take["take_id"] == req.base_take_id for take in agent.take_history
     ):
         return JSONResponse(
@@ -322,10 +300,20 @@ async def generate_riff(req: GenerateRequest):
             },
         )
 
-    trace_id = req.vocal_trace_id or (uuid.uuid4().hex if req.lyrics_prompt else None)
     try:
-        # A fresh agent per request: serverless instances are shared between users,
-        # so take state must come from the client (previous_score), never from memory.
+        previous_score = req.previous_score
+        previous_take = None
+        if req.base_storage_id:
+            from riffs_api.take_store import get_take
+            stored_record = get_take(req.base_storage_id)
+            if stored_record is None:
+                return JSONResponse(
+                    status_code=404,
+                    content={"status": "error", "code": "TAKE_NOT_FOUND", "detail": "No local take matches that ID."},
+                )
+            previous_take = stored_record["take"]
+            previous_score = previous_score or previous_take.get("score")
+        # The client can supply either prior score JSON or a local take storage ID.
         data = RiffsAgent().generate(
             prompt=req.prompt,
             key=req.key or "Am",
@@ -334,7 +322,8 @@ async def generate_riff(req: GenerateRequest):
             instruments=instruments,
             locked_parts=req.locked_parts or [],
             seed=req.seed,
-            previous_score=req.previous_score,
+            previous_score=previous_score,
+            previous_take=previous_take,
             base_take_id=req.base_take_id,
             groove=req.groove,
             lyrics_prompt=req.lyrics_prompt,
@@ -343,21 +332,24 @@ async def generate_riff(req: GenerateRequest):
             vocal_approved=bool(req.vocal_approved),
             vocal_approval_token=req.vocal_approval_token,
             edited_lyrics=req.edited_lyrics,
-            lyrics_draft=req.lyrics_draft,
-            vocal_trace_id=trace_id,
+            acknowledge_unassessed_rights=bool(req.acknowledge_unassessed_rights),
         )
         return {
             "status": "success",
             "data": data
         }
     except PromptRefusal as exc:
-        return JSONResponse(status_code=422, content={"status": "error", "code": exc.code, "detail": exc.detail, "alternative": exc.alternative, "trace_id": trace_id})
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": exc.code,
+                "detail": exc.detail,
+                "alternative": exc.alternative,
+            },
+        )
     except VocalApprovalError as exc:
-        return JSONResponse(status_code=403, content={"status": "error", "code": "VOCAL_AUTH_FAILED", "detail": str(exc), "trace_id": trace_id})
-    except VocalApprovalUnavailable as exc:
-        return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_APPROVAL_UNAVAILABLE", "detail": str(exc), "trace_id": trace_id})
-    except VocalInputError as exc:
-        return JSONResponse(status_code=422, content={"status": "error", "code": "VOCAL_INPUT_INVALID", "detail": str(exc), "trace_id": trace_id})
+        return _vocal_error_response(exc)
     except ProgressionError as exc:
         return JSONResponse(
             status_code=422,
@@ -367,7 +359,6 @@ async def generate_riff(req: GenerateRequest):
                 "detail": str(exc),
             },
         )
-
     except ValueError as exc:
         return JSONResponse(
             status_code=422,
@@ -378,6 +369,9 @@ async def generate_riff(req: GenerateRequest):
             }
         )
     except Exception as exc:
+        mapped = _vocal_error_response(exc)
+        if mapped is not None:
+            return mapped
         return JSONResponse(
             status_code=500,
             content={
@@ -389,32 +383,52 @@ async def generate_riff(req: GenerateRequest):
 
 
 class VocalApproveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     token: str
-    prompt: Optional[str] = "Accompaniment with lead vocal track"
-    previous_score: Optional[Dict[str, Any]] = None
-    locked_parts: Optional[List[str]] = Field(default_factory=list)
+    vocal_trace_id: Optional[str] = None
     lyrics_prompt: str
+    prompt: Optional[str] = "Accompaniment with lead vocal track"
     key: Optional[str] = "Am"
     bpm: Optional[int] = 110
     chords: Optional[str] = "Am - F - C - G"
     instruments: Optional[List[str]] = Field(default_factory=lambda: ["bass_guitar", "rhythm_guitar", "cymbals"])
     edited_lyrics: Optional[Union[List[str], List[Dict[str, Any]]]] = None
-    lyrics_draft: Optional[List[Dict[str, Any]]] = None
-    vocal_trace_id: Optional[str] = None
     seed: Optional[int] = None
-    groove: Literal["straight", "half_time", "swing"] = "straight"
+    groove: Optional[Literal["straight", "half_time", "swing", "half_time_shuffle"]] = "straight"
     vocal_style: Optional[str] = "soulful_lead"
     lyrics_language: Optional[str] = "en"
+    acknowledge_unassessed_rights: Optional[bool] = False
+
+
+def _vocal_error_response(exc: Exception):
+    """Map approval failures to stable codes; None means 'not a vocal approval error'."""
+    from riffs_api.token_store import TokenStoreUnavailable
+    if isinstance(exc, PromptRefusal):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": exc.code,
+                "detail": exc.detail,
+                "alternative": exc.alternative,
+            },
+        )
+    if isinstance(exc, VocalApprovalError):
+        status = 422 if exc.code == "POTENTIAL_MATCH" else 403
+        return JSONResponse(status_code=status, content={"status": "error", "code": exc.code, "detail": str(exc)})
+    if isinstance(exc, TokenStoreUnavailable):
+        return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_REPLAY_STORE_UNAVAILABLE", "detail": str(exc)})
+    if isinstance(exc, RuntimeError) and "RIFFS_VOCAL_SECRET" in str(exc):
+        return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_NOT_CONFIGURED", "detail": "Vocal signing secret is not configured on this server."})
+    return None
 
 
 @generation_router.post("/api/vocals/approve")
 async def approve_vocal_track(req: VocalApproveRequest):
-    trace_id = req.vocal_trace_id or uuid.uuid4().hex
     try:
         data = RiffsAgent().generate(
             prompt=req.prompt or "Accompaniment with lead vocal track",
-            previous_score=req.previous_score,
-            locked_parts=req.locked_parts or [],
             key=req.key or "Am",
             bpm=req.bpm or 110,
             chords=req.chords or "Am - F - C - G",
@@ -427,25 +441,33 @@ async def approve_vocal_track(req: VocalApproveRequest):
             vocal_approved=True,
             vocal_approval_token=req.token,
             edited_lyrics=req.edited_lyrics,
-            lyrics_draft=req.lyrics_draft,
-            vocal_trace_id=trace_id,
+            vocal_trace_id=req.vocal_trace_id,
+            acknowledge_unassessed_rights=bool(req.acknowledge_unassessed_rights),
         )
         return {"status": "success", "data": data}
-    except VocalApprovalError as exc:
-        return JSONResponse(status_code=403, content={"status": "error", "code": "VOCAL_AUTH_FAILED", "detail": str(exc), "trace_id": trace_id})
-    except VocalApprovalUnavailable as exc:
-        return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_APPROVAL_UNAVAILABLE", "detail": str(exc), "trace_id": trace_id})
-    except VocalInputError as exc:
-        return JSONResponse(status_code=422, content={"status": "error", "code": "VOCAL_INPUT_INVALID", "detail": str(exc), "trace_id": trace_id})
-    except PromptRefusal as exc:
-        return JSONResponse(status_code=422, content={"status": "error", "code": exc.code, "detail": exc.detail, "alternative": exc.alternative, "trace_id": trace_id})
-    except ValueError as exc:
-        return JSONResponse(status_code=422, content={"status": "error", "code": "LYRICS_INVALID", "detail": str(exc), "trace_id": trace_id})
     except Exception as exc:
+        mapped = _vocal_error_response(exc)
+        if mapped is not None:
+            return mapped
+        if isinstance(exc, ValueError):
+            return JSONResponse(status_code=403, content={"status": "error", "code": "VOCAL_AUTH_FAILED", "detail": str(exc)})
         return JSONResponse(status_code=500, content={"status": "error", "code": "VOCAL_RENDER_FAILED", "detail": str(exc)})
 
 
 app.include_router(generation_router)
+
+
+@app.get("/api/takes/{storage_id}", dependencies=[Depends(require_generation)])
+async def get_stored_take(storage_id: str):
+    """Read a take saved in this app instance's configured local folder."""
+    from riffs_api.take_store import get_take
+    record = get_take(storage_id)
+    if record is None:
+        return JSONResponse(
+            status_code=404,
+            content={"status": "error", "code": "TAKE_NOT_FOUND", "detail": "No local take matches that ID."},
+        )
+    return {"status": "success", "data": record}
 
 
 class VideoRemuxRequest(BaseModel):
@@ -477,7 +499,6 @@ async def attach_video_endpoint(req: VideoRemuxRequest):
             "remux_mode": result["remux_mode"],
             "video_base64": base64.b64encode(result["content"]).decode("ascii"),
         }
-
     except ValueError as exc:
         return JSONResponse(
             status_code=422,

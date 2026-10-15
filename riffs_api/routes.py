@@ -43,7 +43,7 @@ except ImportError:
 
 from riffs_api.progression import ProgressionError, parse_progression
 from riffs_api.render import render_symbolic_package, symbolic_package_filename
-from riffs_api.score import draft_score
+from riffs_api.score import SUPPORTED_GROOVES, SUPPORTED_INSTRUMENTS, draft_score
 from riffs_api.agent_loop import RiffBuildEnvironment, run_loop
 
 router = APIRouter()
@@ -53,6 +53,9 @@ class ParseProgressionRequest(BaseModel):
     progression: str = Field(min_length=1, max_length=512, description="Chord symbols or Nashville numbers separated by bars, commas, or dashes.")
     key: str | None = Field(default=None, description="Optional major or minor key, such as 'G major' or 'E minor'. Required for Nashville numbers.")
     tempo_bpm: int = Field(default=120, ge=40, le=240, description="Tempo in beats per minute.")
+    prompt: str = Field(default="", max_length=2000)
+    groove: str | None = None
+    instruments: list[str] = Field(default_factory=list)
 
 
 class ChordResponse(BaseModel):
@@ -105,6 +108,8 @@ class AgentLoopRequest(BaseModel):
     tempo_bpm: int = Field(default=120, ge=40, le=240)
     max_steps: int = Field(default=5, ge=1, le=5)
     prompt: str = Field(default="", max_length=2000, description="Optional creative direction checked against RIFFs guardrails before parsing.")
+    groove: str | None = None
+    instruments: list[str] = Field(default_factory=list)
 
 
 @router.post("/api/v1/progressions/parse", response_model=ParseProgressionResponse)
@@ -152,9 +157,15 @@ def draft_score_endpoint(request: ParseProgressionRequest) -> ScoreDraftResponse
 @router.post("/api/v1/tools/render-riff-to-audio")
 def render_riff_to_audio_endpoint(request: ParseProgressionRequest) -> Response:
     try:
-        package = render_symbolic_package(request.progression, request.key, request.tempo_bpm)
-    except ProgressionError as error:
+        package = render_symbolic_package(
+            request.progression, request.key, request.tempo_bpm,
+            prompt=request.prompt, groove=request.groove, instruments=request.instruments or None,
+        )
+    except (ProgressionError, ValueError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+
+    if request.groove is not None and request.groove not in SUPPORTED_GROOVES:
+        raise HTTPException(status_code=422, detail=f"Unsupported groove. Choose one of: {', '.join(SUPPORTED_GROOVES)}.")
 
     return Response(
         content=package,
@@ -170,11 +181,18 @@ def render_riff_to_audio_endpoint(request: ParseProgressionRequest) -> Response:
 @router.post("/api/v1/agent/run")
 def run_agent_loop_endpoint(request: AgentLoopRequest) -> dict:
     """Run the deterministic observe-decide-act loop for a symbolic riff draft."""
+    if request.groove is not None and request.groove not in SUPPORTED_GROOVES:
+        raise HTTPException(status_code=422, detail=f"Unsupported groove. Choose one of: {', '.join(SUPPORTED_GROOVES)}.")
+    unsupported = sorted(set(request.instruments) - set(SUPPORTED_INSTRUMENTS))
+    if unsupported:
+        raise HTTPException(status_code=422, detail=f"Unsupported instrument selection: {', '.join(unsupported)}.")
     env = RiffBuildEnvironment(
         request.progression,
         request.key,
         request.tempo_bpm,
         prompt=request.prompt,
+        groove=request.groove,
+        instruments=request.instruments or None,
     )
     history = run_loop(env, max_steps=request.max_steps)
     final_state = env.get_state()
