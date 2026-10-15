@@ -83,6 +83,8 @@ LOCK_ALIASES = {
     "rhythm": {"rhythm_guitar", "acoustic_piano", "ukulele"},
     "lead": {"tenor_sax", "piccolo"},
     "drums": {"bass_drums", "floor_tom", "bongos", "cymbals", "drum_kit", "triangle"},
+    "vocal": {"vocal_lead"},
+    "vocal_lead": {"vocal_lead"},
 }
 
 @app.post("/api/generate")
@@ -132,13 +134,21 @@ async def generate_riff(req: GenerateRequest):
         )
 
     requested_locks = req.locked_parts or []
+    has_vocal_context = bool(
+        req.lyrics_prompt
+        or req.vocal_approved
+        or (req.previous_score and "vocal_lead" in (req.previous_score.get("part_scores") or {}))
+    )
     unmatched_locks = [
         lock for lock in requested_locks
-        if not any(
-            lock.lower() == instrument.lower()
-            or lock.lower() in instrument.lower()
-            or instrument.lower() in LOCK_ALIASES.get(lock.lower(), set())
-            for instrument in instruments
+        if not (
+            (lock.lower() in ("vocal", "vocal_lead") and has_vocal_context)
+            or any(
+                lock.lower() == instrument.lower()
+                or lock.lower() in instrument.lower()
+                or instrument.lower() in LOCK_ALIASES.get(lock.lower(), set())
+                for instrument in instruments
+            )
         )
     ]
     if unmatched_locks:
@@ -229,6 +239,16 @@ async def generate_riff(req: GenerateRequest):
             "status": "success",
             "data": data
         }
+    except PromptRefusal as exc:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": exc.code,
+                "detail": exc.detail,
+                "alternative": exc.alternative,
+            },
+        )
     except VocalApprovalError as exc:
         return _vocal_error_response(exc)
     except ProgressionError as exc:
@@ -248,16 +268,6 @@ async def generate_riff(req: GenerateRequest):
                 "code": "CHORD_SYNTAX",
                 "detail": str(exc)
             }
-        )
-    except PromptRefusal as exc:
-        return JSONResponse(
-            status_code=422,
-            content={
-                "status": "error",
-                "code": exc.code,
-                "detail": exc.detail,
-                "alternative": exc.alternative,
-            },
         )
     except Exception as exc:
         mapped = _vocal_error_response(exc)
@@ -292,13 +302,23 @@ class VocalApproveRequest(BaseModel):
 def _vocal_error_response(exc: Exception):
     """Map approval failures to stable codes; None means 'not a vocal approval error'."""
     from riffs_api.token_store import TokenStoreUnavailable
+    if isinstance(exc, PromptRefusal):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "error",
+                "code": exc.code,
+                "detail": exc.detail,
+                "alternative": exc.alternative,
+            },
+        )
     if isinstance(exc, VocalApprovalError):
         status = 422 if exc.code == "POTENTIAL_MATCH" else 403
         return JSONResponse(status_code=status, content={"status": "error", "code": exc.code, "detail": str(exc)})
     if isinstance(exc, TokenStoreUnavailable):
         return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_REPLAY_STORE_UNAVAILABLE", "detail": str(exc)})
     if isinstance(exc, RuntimeError) and "RIFFS_VOCAL_SECRET" in str(exc):
-        return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_NOT_CONFIGURED", "detail": str(exc)})
+        return JSONResponse(status_code=503, content={"status": "error", "code": "VOCAL_NOT_CONFIGURED", "detail": "Vocal signing secret is not configured on this server."})
     return None
 
 

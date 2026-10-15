@@ -58,17 +58,19 @@ class TestDay3VideoRemuxTool(unittest.TestCase):
         self.assertTrue(sanitized.endswith(".mov"))
 
     def test_attach_riff_to_video_headless_execution(self):
+        from unittest.mock import patch
         dummy_video = b"\x00\x00\x00 ftypmp42\x00\x00\x00\x00mp42isom"
         dummy_audio = b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00"
-        result = attach_riff_to_video(
-            video_source=dummy_video,
-            audio_source=dummy_audio,
-            video_filename="clip.mp4",
-            audio_filename="riff.wav",
-        )
-        self.assertEqual(result["status"], "success")
-        self.assertTrue(result["filename"].endswith(".mp4"))
-        self.assertGreater(result["size_bytes"], 0)
+        with patch("shutil.which", return_value=None):
+            result = attach_riff_to_video(
+                video_source=dummy_video,
+                audio_source=dummy_audio,
+                video_filename="clip.mp4",
+                audio_filename="riff.wav",
+            )
+            self.assertEqual(result["status"], "success")
+            self.assertTrue(result["filename"].endswith(".mp4"))
+            self.assertGreater(result["size_bytes"], 0)
 
 
 class TestDay3DigitalLicenseCertificate(unittest.TestCase):

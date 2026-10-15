@@ -11,8 +11,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Union
 from composer import INSTRUMENT_TIER, compose, parse_key, MAJOR_SCALE, MINOR_SCALE
-from riffs_api.prompt_guardrails import validate_prompt
+from riffs_api.prompt_guardrails import validate_prompt, validate_lyrics, PromptRefusal
 from riffs_api.token_store import get_token_store
+from riffs_api.audit_trace import record_audit_event
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -114,11 +115,82 @@ def _reuse_locked_part(instrument: str, previous: Dict[str, Any], score: Any) ->
     return payload
 
 
+def _vocal_part_score_payload(
+    vocal_events: List[Dict[str, Any]],
+    chords: List[str],
+    key: str,
+    bpm: int,
+    groove: str = "straight",
+) -> Dict[str, Any]:
+    """Build a serialized part_score payload with valid MIDI bytes for vocal_lead."""
+    from riffs_api.exports import midi_bytes
+    from riffs_api.score import ScoreBar, ScoreDraft, ScoreNote
+
+    bars_dict: Dict[int, List[ScoreNote]] = {}
+    for ev in vocal_events:
+        bar_idx = int(ev["beat"] // 4)
+        onset = round(ev["beat"] % 4.0, 4)
+        dur = round(ev["dur"], 4)
+        note = ScoreNote(pitch_midi=ev["midi"], onset_beats=onset, duration_beats=dur, velocity=ev["vel"])
+        bars_dict.setdefault(bar_idx, []).append(note)
+
+    num_bars = max(len(chords), max(bars_dict.keys(), default=0) + 1)
+    score_bars = []
+    serialized_bars = []
+    for b_idx in range(num_bars):
+        c_sym = chords[b_idx % len(chords)]
+        notes_in_bar = bars_dict.get(b_idx, [])
+        score_bars.append(ScoreBar(bar=b_idx + 1, chord_symbol=c_sym, nashville=None, notes=tuple(notes_in_bar)))
+        serialized_bars.append({
+            "bar": b_idx + 1,
+            "chord_symbol": c_sym,
+            "notes": [
+                {
+                    "pitch_midi": n.pitch_midi,
+                    "onset_beats": n.onset_beats,
+                    "duration_beats": n.duration_beats,
+                    "velocity": n.velocity,
+                }
+                for n in notes_in_bar
+            ],
+        })
+
+    vocal_draft = ScoreDraft(
+        key=key,
+        tempo_bpm=bpm,
+        time_signature="4/4",
+        beats_per_bar=4,
+        chord_chart=" - ".join(chords),
+        nashville_chart=None,
+        bars=tuple(score_bars),
+    )
+    midi = midi_bytes(vocal_draft, channel=0)
+    midi_sha = hashlib.sha256(midi).hexdigest()
+    note_vector_sha = hashlib.sha256(
+        json.dumps(serialized_bars, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+    return {
+        "instrument": "vocal_lead",
+        "role": "lead",
+        "groove": groove,
+        "tempo_bpm": bpm,
+        "chord_chart": " - ".join(chords),
+        "nashville_chart": None,
+        "bars": serialized_bars,
+        "note_vector_sha256": note_vector_sha,
+        "midi_base64": base64.b64encode(midi).decode("ascii"),
+        "midi_sha256": midi_sha,
+    }
+
+
 _LOCK_ALIASES = {
     "bass": {"bass_guitar", "contrabass", "bass_drums"},
     "rhythm": {"rhythm_guitar", "acoustic_piano", "ukulele"},
     "lead": {"tenor_sax", "piccolo"},
     "drums": {"bass_drums", "floor_tom", "bongos", "cymbals", "triangle", "drum_kit"},
+    "vocal": {"vocal_lead"},
+    "vocal_lead": {"vocal_lead"},
 }
 
 FEEL_TO_GROOVE = {
@@ -332,21 +404,26 @@ def hash_lyrics(lyrics: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def hash_context(context: Dict[str, Any]) -> str:
+    payload = json.dumps(context, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def build_vocal_context(
     key: str, bpm: int, chords: List[str], groove: str, instruments: List[str],
     lyrics_prompt: str, lyrics_language: str, vocal_style: str, prompt: str = "",
 ) -> Dict[str, Any]:
     """Everything besides the lyrics the human approved: changing any of it voids the token."""
     return {
-        "key": key,
         "bpm": int(bpm),
         "chords": list(chords),
         "groove": groove,
         "instruments": sorted(instruments),
-        "lyrics_prompt": lyrics_prompt,
+        "key": key,
         "lyrics_language": lyrics_language,
-        "vocal_style": vocal_style,
+        "lyrics_prompt": lyrics_prompt,
         "prompt": prompt or "",
+        "vocal_style": vocal_style,
     }
 
 
@@ -395,43 +472,67 @@ def verify_and_consume_vocal_token(
     now: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Validate everything, then consume the token last so a refused attempt does not burn it."""
+    ctx_hash = hash_context(context)
+    lyr_hash = hash_lyrics(lyrics)
+
+    def _fail(code: str, msg: str):
+        record_audit_event(
+            event_type="approval_rejected",
+            context_hash=ctx_hash,
+            lyrics_hash=lyr_hash,
+            token_id=token,
+            status="rejected",
+            error_code=code,
+            detail=msg,
+        )
+        raise VocalApprovalError(code, msg)
+
     secret = get_vocal_hmac_secret()
     if not token or token.count(".") != 1:
-        raise VocalApprovalError("TOKEN_INVALID", "Invalid or forged vocal approval token. Confirmation rejected.")
+        _fail("TOKEN_INVALID", "Invalid or forged vocal approval token. Confirmation rejected.")
     body, signature = token.split(".")
     expected = hmac.new(secret.encode("utf-8"), body.encode("ascii", "ignore"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(signature, expected):
-        raise VocalApprovalError("TOKEN_INVALID", "Invalid or forged vocal approval token. Confirmation rejected.")
+        _fail("TOKEN_INVALID", "Invalid or forged vocal approval token. Confirmation rejected.")
     try:
         claims = json.loads(_b64url_decode(body))
     except (ValueError, UnicodeDecodeError):
-        raise VocalApprovalError("TOKEN_INVALID", "Malformed vocal approval token.")
+        _fail("TOKEN_INVALID", "Malformed vocal approval token.")
 
     current = now if now is not None else time.time()
     if current > claims["exp"]:
-        raise VocalApprovalError("TOKEN_EXPIRED", "Vocal approval token expired. Request a fresh checkpoint.")
-    if claims["context"] != context:
-        raise VocalApprovalError("CONTEXT_MISMATCH", "Context mismatch: token was issued for different accompaniment settings.")
-    if claims["lyrics_sha256"] != hash_lyrics(lyrics):
-        raise VocalApprovalError(
+        _fail("TOKEN_EXPIRED", "Vocal approval token expired. Request a fresh checkpoint.")
+    if claims.get("context") != context:
+        _fail("CONTEXT_MISMATCH", "Context mismatch: token was issued for different accompaniment settings.")
+    if claims.get("lyrics_sha256") != lyr_hash:
+        _fail(
             "LYRICS_MISMATCH",
             "Lyrics mismatch: token does not authorize these lyrics. Re-run the checkpoint with the edited lyrics to get a new token.",
         )
 
     # Rights gate: the stricter of the issued and the freshly recomputed status applies.
-    statuses = {claims["rights_status"], current_rights_status}
+    statuses = {claims.get("rights_status"), current_rights_status}
     if "possible_match" in statuses:
-        raise VocalApprovalError("POTENTIAL_MATCH", "Vocal approval rejected: a possible melodic match was detected.")
+        _fail("POTENTIAL_MATCH", "Vocal approval rejected: a possible melodic match was detected.")
     if "unassessed" in statuses and not acknowledge_unassessed_rights:
-        raise VocalApprovalError(
+        _fail(
             "RIGHTS_ACK_REQUIRED",
             "Explicit acknowledgment required: rights are unassessed and no copyright clearance is granted.",
         )
 
     store = token_store or get_token_store()
     if not store.consume_token(claims["jti"], claims["exp"]):
-        raise VocalApprovalError("TOKEN_REPLAYED", "Vocal approval token has already been used.")
+        _fail("TOKEN_REPLAYED", "Vocal approval token has already been used.")
+
+    record_audit_event(
+        event_type="approval_accepted",
+        context_hash=ctx_hash,
+        lyrics_hash=lyr_hash,
+        token_id=claims.get("jti") or token,
+        status="approved",
+    )
     return claims
+
 
 
 def parse_root_pitch_class(chord: str) -> int:
@@ -749,13 +850,16 @@ def _generate_vocal_melody_events(
     key: str,
     lyrics_bars: List[Dict[str, Any]],
     seed: int = 1,
+    total_bars: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Synthesize vocal note events mapped to lyrics syllables and chord tones."""
+    """Synthesize vocal note events mapped to lyrics syllables and chord tones across the loop."""
     events = []
     rng = random.Random(seed * 31337)
+    num_bars = total_bars if total_bars is not None else len(lyrics_bars)
 
-    for i, bar_info in enumerate(lyrics_bars):
-        chord_sym = bar_info.get("chord") or chords[i % len(chords)]
+    for i in range(num_bars):
+        bar_info = lyrics_bars[i % len(lyrics_bars)] if lyrics_bars else {}
+        chord_sym = chords[i % len(chords)] if chords else bar_info.get("chord", "C")
         bar_start = i * 4.0
         chord_root = parse_root_pitch_class(chord_sym)
         base_octave = 60
@@ -777,6 +881,7 @@ def _generate_vocal_melody_events(
                 "lyric": word_snip,
             })
     return events
+
 
 
 class RiffsAgent:
@@ -998,10 +1103,62 @@ class RiffsAgent:
             }, sort_keys=True, separators=(",", ":")).encode("utf-8")
             license_cert["hash_sha256"] = hashlib.sha256(provenance_payload).hexdigest()
 
-        # Check if lyrics/vocals were requested (Suno-style double prompting)
+        # Check if lyrics/vocals were requested (Suno-style double prompting) or locked from prior take
         final_lyrics = None
-        if lyrics_prompt:
+        prior_vocal_lane = next((l for l in (previous_score or {}).get("lanes", []) if l.get("instrument") == "vocal_lead"), None)
+        prior_vocal_part = previous_parts.get("vocal_lead")
+        vocal_locked = (_locked_part("vocal_lead", locked_parts) or _locked_part("vocal", locked_parts)) and (prior_vocal_lane is not None or prior_vocal_part is not None)
+
+        if not lyrics_prompt and vocal_locked:
+            vocal_events = prior_vocal_lane["events"] if prior_vocal_lane else [
+                {"beat": (b["bar"] - 1) * 4.0 + n["onset_beats"], "dur": n["duration_beats"], "midi": n["pitch_midi"], "vel": n["velocity"], "lyric": ""}
+                for b in prior_vocal_part.get("bars", []) for n in b.get("notes", [])
+            ]
+            if prior_vocal_part:
+                vocal_payload = dict(prior_vocal_part)
+                vocal_payload["locked"] = True
+            else:
+                vocal_payload = _vocal_part_score_payload(vocal_events, parsed_chords, key, bpm, groove)
+                vocal_payload["locked"] = True
+            note_hash = prior_vocal_lane.get("hash") if prior_vocal_lane else vocal_payload["note_vector_sha256"]
+
+            part_scores["vocal_lead"] = vocal_payload
+            vocal_lane = {
+                "tier": "vocal",
+                "instrument": "vocal_lead",
+                "locked": True,
+                "source": "locked",
+                "hash": note_hash,
+                "events": vocal_events,
+            }
+            score["lanes"].append(vocal_lane)
+            stems.append({
+                "lane": "vocal_lead",
+                "role": "lead",
+                "filename": f"riff_{key}_{bpm}bpm_vocal_lead.mid",
+                "locked": True,
+                "available": True,
+                "format": "midi",
+                "lyrics": prior_vocal_lane.get("lyrics"),
+                "midi_sha256": vocal_payload["midi_sha256"],
+                "note_vector_sha256": vocal_payload["note_vector_sha256"],
+            })
+        elif lyrics_prompt:
             get_vocal_hmac_secret()  # fail fast, before any token is issued or checked
+
+            ALLOWED_LANGUAGES = {"en", "es", "fr", "ja", "de", "it", "pt"}
+            ALLOWED_VOCAL_STYLES = {"soulful_lead", "pop_lead", "rap_lead", "rock_lead", "jazz_lead", "rnb_lead", "folk_lead"}
+            if lyrics_language not in ALLOWED_LANGUAGES:
+                raise VocalApprovalError(
+                    "INVALID_LANGUAGE",
+                    f"Unsupported lyrics language: '{lyrics_language}'. Allowed: {', '.join(sorted(ALLOWED_LANGUAGES))}",
+                )
+            if vocal_style not in ALLOWED_VOCAL_STYLES:
+                raise VocalApprovalError(
+                    "INVALID_VOCAL_STYLE",
+                    f"Unsupported vocal style: '{vocal_style}'. Allowed: {', '.join(sorted(ALLOWED_VOCAL_STYLES))}",
+                )
+
             rights_status = derive_rights_status(melody_checks)
             vocal_context = build_vocal_context(
                 key, bpm, parsed_chords, groove, instruments,
@@ -1025,9 +1182,10 @@ class RiffsAgent:
             if not vocal_approved:
                 # Human-In-The-Loop Checkpoint: Halt before vocal audio synthesis.
                 # Edited lyrics re-enter here so the new token binds to the edited text.
-                if edited_lyrics:
+                if edited_lyrics is not None:
+                    valid_lines = validate_lyrics(edited_lyrics)
                     lyrics_draft = {
-                        "bars": _bars_from(edited_lyrics),
+                        "bars": _bars_from(valid_lines),
                         "language": lyrics_language,
                         "vocal_style": vocal_style,
                         "instrumental_vibe": detect_instrumental_vibe(prompt, groove, instruments),
@@ -1049,6 +1207,15 @@ class RiffsAgent:
                     )
                     lyrics_draft["bars"] = _bars_from(lyrics_draft.get("bars"))
                 token = generate_vocal_token(lyrics_draft["bars"], vocal_context, rights_status)
+
+                record_audit_event(
+                    event_type="checkpoint_created",
+                    context_hash=hash_context(vocal_context),
+                    lyrics_hash=hash_lyrics(lyrics_draft["bars"]),
+                    token_id=token,
+                    status="awaiting_confirmation",
+                )
+
                 result_data = {
                     "status": "awaiting_vocal_confirmation",
                     "checkpoint": "HUMAN_IN_THE_LOOP_VOCAL_APPROVAL",
@@ -1082,7 +1249,9 @@ class RiffsAgent:
                     result_data["ai_enrichment"] = claude_enhancement
 
                 from riffs_api.take_store import store_take
-                result_data["take_storage"] = store_take(result_data)
+                stored_take = dict(result_data)
+                stored_take["vocal_confirmation_token"] = "[REDACTED]"
+                result_data["take_storage"] = store_take(stored_take)
 
                 take_id = self._next_take_id
                 self._next_take_id += 1
@@ -1092,11 +1261,13 @@ class RiffsAgent:
 
             # Human has approved. The final lyrics must be supplied explicitly: the token is
             # bound to their exact text, so the server never regenerates them at approval time.
-            final_lyrics = _bars_from(edited_lyrics)
-            if not final_lyrics or not all(bar["text"] for bar in final_lyrics):
+            if edited_lyrics is None:
                 raise VocalApprovalError(
                     "LYRICS_REQUIRED", "Approval must include the exact final lyrics shown at the checkpoint."
                 )
+            valid_final = validate_lyrics(edited_lyrics)
+            final_lyrics = _bars_from(valid_final)
+
             verify_and_consume_vocal_token(
                 vocal_approval_token,
                 final_lyrics,
@@ -1105,13 +1276,37 @@ class RiffsAgent:
                 acknowledge_unassessed_rights=acknowledge_unassessed_rights,
             )
 
-            vocal_events = _generate_vocal_melody_events(parsed_chords, key, final_lyrics, seed)
+            vocal_locked = _locked_part("vocal_lead", locked_parts) or _locked_part("vocal", locked_parts)
+            prior_vocal_lane = next((l for l in (previous_score or {}).get("lanes", []) if l.get("instrument") == "vocal_lead"), None)
+            prior_vocal_part = previous_parts.get("vocal_lead")
+
+            if vocal_locked and (prior_vocal_lane is not None or prior_vocal_part is not None):
+                vocal_events = prior_vocal_lane["events"] if prior_vocal_lane else [
+                    {"beat": (b["bar"] - 1) * 4.0 + n["onset_beats"], "dur": n["duration_beats"], "midi": n["pitch_midi"], "vel": n["velocity"], "lyric": ""}
+                    for b in prior_vocal_part.get("bars", []) for n in b.get("notes", [])
+                ]
+                if prior_vocal_part:
+                    vocal_payload = dict(prior_vocal_part)
+                    vocal_payload["locked"] = True
+                else:
+                    vocal_payload = _vocal_part_score_payload(vocal_events, parsed_chords, key, bpm, groove)
+                    vocal_payload["locked"] = True
+                note_hash = prior_vocal_lane.get("hash") if prior_vocal_lane else vocal_payload["note_vector_sha256"]
+            else:
+                vocal_events = _generate_vocal_melody_events(
+                    parsed_chords, key, final_lyrics, seed, total_bars=len(score["bars"])
+                )
+                vocal_payload = _vocal_part_score_payload(vocal_events, parsed_chords, key, bpm, groove)
+                note_hash = vocal_payload["note_vector_sha256"]
+
+            part_scores["vocal_lead"] = vocal_payload
+
             vocal_lane = {
                 "tier": "vocal",
                 "instrument": "vocal_lead",
-                "locked": False,
-                "source": "generated",
-                "hash": hashlib.sha256(json.dumps(vocal_events, sort_keys=True).encode()).hexdigest(),
+                "locked": bool(vocal_locked),
+                "source": "locked" if vocal_locked else "generated",
+                "hash": note_hash,
                 "events": vocal_events,
             }
             score["lanes"].append(vocal_lane)
@@ -1119,11 +1314,14 @@ class RiffsAgent:
                 "lane": "vocal_lead",
                 "role": "lead",
                 "filename": f"riff_{key}_{bpm}bpm_vocal_lead.mid",
-                "locked": False,
+                "locked": bool(vocal_locked),
                 "available": True,
                 "format": "midi",
                 "lyrics": final_lyrics,
+                "midi_sha256": vocal_payload["midi_sha256"],
+                "note_vector_sha256": vocal_payload["note_vector_sha256"],
             })
+
 
         result_data = {
             "status": "success",
