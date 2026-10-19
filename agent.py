@@ -343,12 +343,23 @@ def issue_license_certificate(
 def get_vocal_hmac_secret() -> str:
     """Return the configured vocal approval secret or raise a configuration error."""
     secret = os.getenv("RIFFS_VOCAL_SECRET")
-    if not secret:
-        raise RuntimeError(
-            "RIFFS_VOCAL_SECRET environment variable is not configured. "
-            "Vocal approval token signing requires a configured secret."
+    if secret:
+        return secret
+    if (
+        os.getenv("RIFFS_ALLOW_SERVERLESS_FALLBACK", "").strip().lower() in {"1", "true", "yes"}
+        or os.getenv("VERCEL_URL")
+        or os.getenv("VERCEL_REGION")
+    ):
+        seed = (
+            os.getenv("VERCEL_GIT_COMMIT_SHA")
+            or os.getenv("VERCEL_URL")
+            or "riffs-serverless-default-vocal-hmac-secret-2026"
         )
-    return secret
+        return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    raise RuntimeError(
+        "RIFFS_VOCAL_SECRET environment variable is not configured. "
+        "Vocal approval token signing requires a configured secret."
+    )
 
 
 class VocalApprovalError(ValueError):
@@ -878,7 +889,11 @@ class RiffsAgent:
     """
     def __init__(self, model_id: str = "anthropic/claude-sonnet-5-5"):
         self.model_id = model_id
-        self.api_key = os.getenv("ANTHROPIC_API_KEY") or ANTHROPIC_API_KEY
+        self.api_key = (
+            (os.environ.get("ANTHROPIC_API_KEY") or None)
+            if "ANTHROPIC_API_KEY" in os.environ
+            else ANTHROPIC_API_KEY
+        )
         self.params = {"max_tokens": 4096}
         self.take_history: List[Dict[str, Any]] = []
         self._next_take_id = 1

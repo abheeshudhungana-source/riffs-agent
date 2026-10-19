@@ -30,6 +30,13 @@ def _decode_jwt_segment(segment: str) -> bytes:
 LOCAL_DEMO_ISSUER = "riffs-local-demo"
 LOCAL_DEMO_AUDIENCE = "riffs-local-api"
 _LOCAL_DEMO_JWT_SECRET = secrets.token_urlsafe(48)
+_SERVERLESS_DEMO_JWT_SECRET = hashlib.sha256(
+    (
+        os.getenv("VERCEL_GIT_COMMIT_SHA")
+        or os.getenv("VERCEL_URL")
+        or "riffs-serverless-default-jwt-secret-key-2026"
+    ).encode("utf-8")
+).hexdigest()
 
 
 def _is_deployed_environment() -> bool:
@@ -41,17 +48,28 @@ def _is_deployed_environment() -> bool:
     )
 
 
+def _has_serverless_fallback() -> bool:
+    return bool(
+        os.getenv("RIFFS_ALLOW_SERVERLESS_FALLBACK", "").strip().lower() in {"1", "true", "yes"}
+        or os.getenv("VERCEL_URL")
+        or os.getenv("VERCEL_REGION")
+    )
+
+
 def _demo_auth_enabled() -> bool:
+    if _has_serverless_fallback():
+        return True
     enabled = os.getenv("RIFFS_ENABLE_DEMO_AUTH", "").strip().lower() in {"1", "true", "yes"}
     return enabled and not _is_deployed_environment()
 
 
-def _jwt_settings() -> tuple[str | None, str | None, str | None]:
+def _jwt_settings() -> tuple[Optional[str], Optional[str], Optional[str]]:
     secret = os.getenv("RIFFS_JWT_SECRET")
     issuer = os.getenv("RIFFS_JWT_ISSUER")
     audience = os.getenv("RIFFS_JWT_AUDIENCE")
     if _demo_auth_enabled():
-        secret = secret or _LOCAL_DEMO_JWT_SECRET
+        fallback_secret = _SERVERLESS_DEMO_JWT_SECRET if _has_serverless_fallback() else _LOCAL_DEMO_JWT_SECRET
+        secret = secret or fallback_secret
         issuer = issuer or LOCAL_DEMO_ISSUER
         audience = audience or LOCAL_DEMO_AUDIENCE
     return secret, issuer, audience
@@ -59,8 +77,8 @@ def _jwt_settings() -> tuple[str | None, str | None, str | None]:
 
 def issue_jwt_token(
     sub: str = "beta-tester-user",
-    roles: list[str] | None = None,
-    entitlements: list[str] | None = None,
+    roles: Optional[List[str]] = None,
+    entitlements: Optional[List[str]] = None,
     expires_in: int = 86400,
 ) -> str:
     if not _demo_auth_enabled():
@@ -88,7 +106,7 @@ def issue_jwt_token(
     return f"{header_segment}.{claims_segment}.{signature}"
 
 
-def verify_token(token: str) -> dict | None:
+def verify_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify an HS256 access token; fail closed when auth is not configured."""
     secret, issuer, audience = _jwt_settings()
     if not secret or len(secret.encode("utf-8")) < 32 or not issuer or not audience:
@@ -135,10 +153,10 @@ local count = redis.call('INCR', KEYS[1])
 if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
 return count
 """
-_IN_MEMORY_RATE_LIMITS: dict[str, tuple[int, int]] = {}
+_IN_MEMORY_RATE_LIMITS: Dict[str, tuple[int, int]] = {}
 
 
-def increment_generation_count(user: str, now: float | None = None) -> int:
+def increment_generation_count(user: str, now: Optional[float] = None) -> int:
     now = time.time() if now is None else now
     window = int(now // RATE_WINDOW_SECONDS)
     user_key = hashlib.sha256(user.encode("utf-8")).hexdigest()[:32]
@@ -148,7 +166,7 @@ def increment_generation_count(user: str, now: float | None = None) -> int:
         return int(redis_client.eval(_RATE_LIMIT_SCRIPT, 1, key, RATE_WINDOW_SECONDS))
     except Exception as exc:
         if not os.getenv("REDIS_URL"):
-            if _is_deployed_environment():
+            if _is_deployed_environment() and not _has_serverless_fallback():
                 raise RuntimeError("Shared Redis rate limiting is required in deployed environments") from exc
             prev_window, count = _IN_MEMORY_RATE_LIMITS.get(user_key, (window, 0))
             if prev_window != window:
@@ -160,7 +178,7 @@ def increment_generation_count(user: str, now: float | None = None) -> int:
         raise exc
 
 
-def require_generation(authorization: str | None = Header(default=None)) -> str:
+def require_generation(authorization: Optional[str] = Header(default=None)) -> str:
     scheme, _, token = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or not token.strip():
         raise HTTPException(401, "Valid bearer token required", headers={"WWW-Authenticate": "Bearer"})

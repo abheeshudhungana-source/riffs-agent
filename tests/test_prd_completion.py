@@ -125,6 +125,65 @@ class TestPrdCompletion(unittest.TestCase):
             self.assertEqual(chart["key"], "A minor")
             self.assertEqual(len(chart["bars"]), 4)
 
+    def test_vercel_serverless_zero_config_end_to_end(self):
+        import os
+        vercel_env = {
+            "VERCEL": "1",
+            "VERCEL_ENV": "production",
+            "VERCEL_URL": "riffs-agent.vercel.app",
+            "VERCEL_REGION": "iad1",
+            "REDIS_URL": "",
+            "KV_REST_API_URL": "",
+            "UPSTASH_REDIS_REST_URL": "",
+            "RIFFS_JWT_SECRET": "",
+            "RIFFS_VOCAL_SECRET": "",
+            "ANTHROPIC_API_KEY": "",
+        }
+        with patch.dict(os.environ, vercel_env, clear=True):
+            token_res = self.client.post("/api/auth/token")
+            self.assertEqual(token_res.status_code, 200)
+            access_token = token_res.json()["access_token"]
+            headers = {"Authorization": f"Bearer {access_token}"}
+
+            gen_res = self.client.post(
+                "/api/generate",
+                json={
+                    "prompt": "Warm neo-soul groove",
+                    "key": "Am",
+                    "bpm": 96,
+                    "chords": "Am - F - C - G",
+                    "instruments": ["bass_guitar", "rhythm_guitar", "cymbals"],
+                    "lyrics_prompt": "Walking through midnight rain",
+                },
+                headers=headers,
+            )
+            self.assertEqual(gen_res.status_code, 200)
+            checkpoint_data = gen_res.json()["data"]
+            self.assertEqual(checkpoint_data["status"], "awaiting_vocal_confirmation")
+
+            approve_res = self.client.post(
+                "/api/vocals/approve",
+                json={
+                    "token": checkpoint_data["vocal_confirmation_token"],
+                    "vocal_trace_id": checkpoint_data["vocal_trace_id"],
+                    "prompt": "Warm neo-soul groove",
+                    "key": "Am",
+                    "bpm": 96,
+                    "chords": "Am - F - C - G",
+                    "instruments": ["bass_guitar", "rhythm_guitar", "cymbals"],
+                    "groove": checkpoint_data["groove"],
+                    "lyrics_prompt": "Walking through midnight rain",
+                    "lyrics_language": "en",
+                    "vocal_style": "soulful_lead",
+                    "edited_lyrics": checkpoint_data["lyrics_draft"]["bars"],
+                    "acknowledge_unassessed_rights": True,
+                },
+                headers=headers,
+            )
+            self.assertEqual(approve_res.status_code, 200)
+            self.assertEqual(approve_res.json()["data"]["status"], "success")
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -13,6 +13,8 @@ Design rules (see docs/PRD.md section 3.6):
     through the generator, so its notes cannot drift between takes.
 """
 
+from __future__ import annotations
+
 import hashlib
 import random
 import re

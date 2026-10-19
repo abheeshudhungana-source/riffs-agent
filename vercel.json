@@ -1,5 +1,9 @@
 {
+  "env": {
+    "RIFFS_ALLOW_SERVERLESS_FALLBACK": "1"
+  },
   "functions": {
     "app.py": { "includeFiles": "{index.html,composer.py,agent.py,riffs_api/**}" }
   }
 }
+

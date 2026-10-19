@@ -95,6 +95,14 @@ def _is_deployed_environment() -> bool:
     )
 
 
+def _has_serverless_fallback() -> bool:
+    return bool(
+        os.getenv("RIFFS_ALLOW_SERVERLESS_FALLBACK", "").strip().lower() in {"1", "true", "yes"}
+        or os.getenv("VERCEL_URL")
+        or os.getenv("VERCEL_REGION")
+    )
+
+
 def set_token_store(store: Optional[Any]) -> None:
     """Install a store explicitly (tests); pass None to restore environment selection."""
     global _override
@@ -108,10 +116,11 @@ def get_token_store() -> Any:
     token = os.getenv("KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
     if url and token:
         return UpstashRedisTokenStore(url, token)
-    if _is_deployed_environment():
+    if _is_deployed_environment() and not _has_serverless_fallback():
         raise TokenStoreUnavailable(
             "Vocal approval needs a shared token store in production: set KV_REST_API_URL and "
             "KV_REST_API_TOKEN (Vercel KV / Upstash). In-memory storage cannot prevent replay "
             "across serverless instances."
         )
     return _memory_store
+

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Dict, List, Optional
+
 try:
     from fastapi import APIRouter, HTTPException
     from fastapi.responses import Response
@@ -20,7 +22,7 @@ except ImportError:
             super().__init__(f"HTTP {status_code}: {detail}")
 
     class Response:
-        def __init__(self, content: bytes = b"", media_type: str = "", headers: dict | None = None, status_code: int = 200):
+        def __init__(self, content: bytes = b"", media_type: str = "", headers: Optional[Dict[str, str]] = None, status_code: int = 200):
             self.content = content
             self.body = content
             self.media_type = media_type
@@ -51,11 +53,11 @@ router = APIRouter()
 
 class ParseProgressionRequest(BaseModel):
     progression: str = Field(min_length=1, max_length=512, description="Chord symbols or Nashville numbers separated by bars, commas, or dashes.")
-    key: str | None = Field(default=None, description="Optional major or minor key, such as 'G major' or 'E minor'. Required for Nashville numbers.")
+    key: Optional[str] = Field(default=None, description="Optional major or minor key, such as 'G major' or 'E minor'. Required for Nashville numbers.")
     tempo_bpm: int = Field(default=120, ge=40, le=240, description="Tempo in beats per minute.")
     prompt: str = Field(default="", max_length=2000)
-    groove: str | None = None
-    instruments: list[str] = Field(default_factory=list)
+    groove: Optional[str] = None
+    instruments: List[str] = Field(default_factory=list)
 
 
 class ChordResponse(BaseModel):
@@ -65,17 +67,17 @@ class ChordResponse(BaseModel):
     pitch_class: int
     quality: str
     symbol: str
-    scale_degree: int | None
-    nashville: str | None
+    scale_degree: Optional[int]
+    nashville: Optional[str]
     source_kind: str
 
 
 class ParseProgressionResponse(BaseModel):
-    key: str | None
+    key: Optional[str]
     tempo_bpm: int
     chord_chart: str
-    nashville_chart: str | None
-    chords: list[ChordResponse]
+    nashville_chart: Optional[str]
+    chords: List[ChordResponse]
 
 
 class ScoreNoteResponse(BaseModel):
@@ -88,28 +90,28 @@ class ScoreNoteResponse(BaseModel):
 class ScoreBarResponse(BaseModel):
     bar: int
     chord_symbol: str
-    nashville: str | None
-    notes: list[ScoreNoteResponse]
+    nashville: Optional[str]
+    notes: List[ScoreNoteResponse]
 
 
 class ScoreDraftResponse(BaseModel):
-    key: str | None
+    key: Optional[str]
     tempo_bpm: int
     time_signature: str
     beats_per_bar: int
     chord_chart: str
-    nashville_chart: str | None
-    bars: list[ScoreBarResponse]
+    nashville_chart: Optional[str]
+    bars: List[ScoreBarResponse]
 
 
 class AgentLoopRequest(BaseModel):
     progression: str = Field(min_length=1, max_length=512)
-    key: str | None = Field(default=None, description="Required for Nashville-number progressions.")
+    key: Optional[str] = Field(default=None, description="Required for Nashville-number progressions.")
     tempo_bpm: int = Field(default=120, ge=40, le=240)
     max_steps: int = Field(default=5, ge=1, le=5)
     prompt: str = Field(default="", max_length=2000, description="Optional creative direction checked against RIFFs guardrails before parsing.")
-    groove: str | None = None
-    instruments: list[str] = Field(default_factory=list)
+    groove: Optional[str] = None
+    instruments: List[str] = Field(default_factory=list)
 
 
 @router.post("/api/v1/progressions/parse", response_model=ParseProgressionResponse)
