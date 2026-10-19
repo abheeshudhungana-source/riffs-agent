@@ -2687,9 +2687,10 @@ E|---------------------------------------------------------5-3-0----|
         const videoBase64 = arrayBufferToBase64(selectedVideoArrayBuffer);
 
         // 2. Call backend remux endpoint
+        const dubHeaders = await getAuthHeaders({ 'Content-Type': 'application/json' });
         const res = await fetch('/api/v1/tools/attach-riff-to-video', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: dubHeaders,
           body: JSON.stringify({
             video_base64: videoBase64,
             audio_base64: audioBase64,

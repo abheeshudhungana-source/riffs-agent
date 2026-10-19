@@ -19,6 +19,7 @@ import io
 import json
 import unittest
 import zipfile
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app import app
@@ -29,6 +30,8 @@ class TestPrdCompletion(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.client = TestClient(app)
+        cls.auth_headers = {"Authorization": "Bearer valid-beta-test-token"}
+        cls.claims = {"sub": "beta-test-user", "roles": ["beta_tester"], "entitlements": ["generation"]}
 
     def test_attach_riff_to_video_endpoint_success(self):
         dummy_video = b"\x00\x00\x00 ftypmp42\x00\x00\x00\x00mp42isom" + b"\x00" * 128
@@ -39,7 +42,8 @@ class TestPrdCompletion(unittest.TestCase):
             "video_filename": "dance_clip.mp4",
             "audio_filename": "backing_riff.wav",
         }
-        res = self.client.post("/api/v1/tools/attach-riff-to-video", json=payload)
+        with patch("app.verify_token", return_value=self.claims):
+            res = self.client.post("/api/v1/tools/attach-riff-to-video", json=payload, headers=self.auth_headers)
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertEqual(data["status"], "success")
@@ -59,7 +63,8 @@ class TestPrdCompletion(unittest.TestCase):
             "audio_base64": base64.b64encode(b"audio").decode("ascii"),
             "video_filename": "huge_video.mp4",
         }
-        res = self.client.post("/api/v1/tools/attach-riff-to-video", json=payload)
+        with patch("app.verify_token", return_value=self.claims):
+            res = self.client.post("/api/v1/tools/attach-riff-to-video", json=payload, headers=self.auth_headers)
         self.assertEqual(res.status_code, 422)
         body = res.json()
         self.assertEqual(body["status"], "error")
@@ -76,7 +81,8 @@ class TestPrdCompletion(unittest.TestCase):
                     "audio_base64": base64.b64encode(dummy_audio).decode("ascii"),
                     "video_filename": bad_ext,
                 }
-                res = self.client.post("/api/v1/tools/attach-riff-to-video", json=payload)
+                with patch("app.verify_token", return_value=self.claims):
+                    res = self.client.post("/api/v1/tools/attach-riff-to-video", json=payload, headers=self.auth_headers)
                 self.assertEqual(res.status_code, 422)
                 body = res.json()
                 self.assertEqual(body["code"], "VIDEO_VALIDATION")
