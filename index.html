@@ -59,11 +59,11 @@
         <span class="font-bold">Agent Loop Active</span>
       </div>
 
-      <!-- DUBBING & REMUX TOOL LINK -->
-      <a href="#dubbing-editing" id="nav-dubbing-link" class="ml-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 hover:border-indigo-500/50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-semibold transition cursor-pointer">
+      <!-- DUBBING & REMUX TOOL TRIGGER (PRD Section 3.7 & 5) -->
+      <button type="button" id="nav-dubbing-link" class="ml-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 hover:border-indigo-500/50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-semibold transition cursor-pointer active:scale-95" title="Open Headless Video Audio Dubbing Workspace">
         <span>🎬 Dub Video</span>
-        <span class="text-[10px] bg-indigo-500/30 px-1 py-0.2 rounded text-indigo-200">Day 3</span>
-      </a>
+        <span class="text-[10px] bg-indigo-500/30 px-1 py-0.2 rounded text-indigo-200">FFmpeg</span>
+      </button>
     </div>
   </header>
 
@@ -379,9 +379,23 @@ A|-----------------------------------------------7-5-3h5-3----------|
 E|---------------------------------------------------------5-3-0----|
           </div>
 
-          <!-- STAFF SHEET (HIDDEN INITIALLY) -->
-          <div id="view-sheet" class="hidden text-center text-slate-400 text-xs">
-            🎼 Standard 5-line notation rendered with MusicXML engine (Treble &amp; Bass clef).
+          <!-- STAFF SHEET (VIEW C: 5-LINE GRAND STAFF VISUALIZER) -->
+          <div id="view-sheet" class="hidden w-full space-y-3">
+            <div class="flex flex-wrap items-center justify-between text-xs text-slate-400 px-1 font-mono gap-2 border-b border-slate-800/80 pb-2">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-amber-400">Grand Staff Visualizer</span>
+                <span id="staff-key-badge" class="bg-slate-800 text-slate-200 px-2 py-0.5 rounded text-[11px]">Key: Am</span>
+                <span class="bg-slate-800 text-slate-200 px-2 py-0.5 rounded text-[11px]">Time: 4/4</span>
+              </div>
+              <div class="flex items-center gap-3 text-[11px]">
+                <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> Treble Triads</span>
+                <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span> Bass Roots</span>
+                <span class="text-slate-500 font-sans">Synced in Real-Time</span>
+              </div>
+            </div>
+            <div id="staff-sheet-svg-container" class="w-full overflow-x-auto bg-slate-950/70 border border-slate-800 rounded-xl p-3 shadow-inner">
+              <!-- SVG dynamically populated by renderStaffSheet() -->
+            </div>
           </div>
 
           <!-- LYRICS VIEW (HIDDEN INITIALLY) -->
@@ -393,18 +407,21 @@ E|---------------------------------------------------------5-3-0----|
         </div>
       </div>
 
-      <!-- SAVE MP3 SUITE -->
-      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-xl flex items-center justify-between">
+      <!-- SAVE MP3 & DAW STEMS SUITE -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h4 class="font-bold text-sm text-slate-200 flex items-center gap-2">
-            <span>💾 Save Generated Audio</span>
+            <span>💾 Save &amp; Export Suite</span>
             <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">Ready</span>
           </h4>
-          <p class="text-xs text-slate-400 mt-0.5">Download your generated accompaniment riff as high-quality 320kbps MP3</p>
+          <p class="text-xs text-slate-400 mt-0.5">Download full audio mixdown or multi-track DAW stems with provenance license</p>
         </div>
-        <div class="flex items-center gap-2">
-          <button id="btn-save-mp3" class="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/25 cursor-pointer active:scale-95">
-            <span>📥 Save MP3</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="btn-save-mp3" class="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/25 cursor-pointer active:scale-95" title="Download active take mixdown as 44.1kHz WAV">
+            <span>📥 Save Audio (WAV)</span>
+          </button>
+          <button id="btn-export-stems" class="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer active:scale-95" title="Download ZIP archive containing multi-track MIDI stems, MusicXML score, and provenance license manifest">
+            <span>📦 Export DAW Stems &amp; License (.zip)</span>
           </button>
         </div>
       </div>
@@ -545,6 +562,98 @@ E|---------------------------------------------------------5-3-0----|
       <footer id="modal-default-footer" class="mt-6 flex justify-end gap-3">
         <button id="btn-cancel-modal" type="button" class="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-100">Cancel</button>
         <button id="btn-confirm-synthesize" type="button" class="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-40">Confirm &amp; Synthesize</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- HEADLESS VIDEO DUBBING WORKSPACE MODAL (PRD Section 3.7 & 5) -->
+  <div id="dubbing-modal" class="fixed inset-0 z-[60] hidden" role="dialog" aria-modal="true" aria-labelledby="dubbing-modal-title">
+    <div id="dubbing-modal-backdrop" class="absolute inset-0 bg-black/80 backdrop-blur-md"></div>
+    <div class="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl rounded-t-2xl border border-slate-800 bg-slate-900/95 p-6 shadow-2xl md:inset-y-0 md:my-auto md:h-fit md:max-h-[90vh] md:overflow-y-auto md:rounded-2xl">
+      <header class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 id="dubbing-modal-title" class="text-lg font-bold text-slate-100 flex items-center gap-2">
+            <span>🎬 Headless Video Dubbing Workspace</span>
+            <span class="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-mono uppercase tracking-wider">FFmpeg &lt;1.5s</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Strip phone mic noise and stream-copy the current acoustic riff onto your raw footage in &lt;1.5s without any video editing software.</p>
+        </div>
+        <button id="btn-close-dubbing" type="button" aria-label="Close" class="rounded-lg p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800">✕</button>
+      </header>
+
+      <div class="mt-4 space-y-4">
+        <!-- VIDEO UPLOAD DROPZONE -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Raw Video Footage (MP4 or MOV, max 50MB):</label>
+          <div id="dub-dropzone" class="border-2 border-dashed border-slate-700 hover:border-indigo-500/60 rounded-xl p-5 text-center cursor-pointer transition bg-slate-950/40">
+            <input type="file" id="dub-file-input" accept="video/mp4,video/quicktime,.mp4,.mov" class="hidden" />
+            <div id="dub-dropzone-prompt">
+              <span class="text-3xl block mb-2">📹</span>
+              <p class="text-xs font-medium text-slate-200">Drag &amp; drop video file here or <span class="text-indigo-400 underline">browse</span></p>
+              <p class="text-[11px] text-slate-500 mt-1">Strict whitelist: .mp4 and .mov up to 50MB (max 60 seconds)</p>
+            </div>
+            <div id="dub-file-info" class="hidden flex items-center justify-between bg-slate-900 border border-slate-700/80 rounded-lg p-3 text-left">
+              <div class="flex items-center gap-3 overflow-hidden">
+                <span class="text-2xl">🎞️</span>
+                <div class="truncate">
+                  <p id="dub-file-name" class="text-xs font-bold text-slate-200 truncate">video.mp4</p>
+                  <p id="dub-file-meta" class="text-[10px] text-slate-400 mt-0.5">12.4 MB • MP4</p>
+                </div>
+              </div>
+              <button id="btn-remove-video" type="button" class="text-xs text-rose-400 hover:text-rose-300 px-2 py-1 rounded hover:bg-rose-950/40">Change</button>
+            </div>
+          </div>
+          <p id="dub-file-error" class="hidden mt-2 text-xs text-rose-400 font-medium"></p>
+        </div>
+
+        <!-- AUDIO SOURCE SUMMARY -->
+        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🎵</span>
+              <div>
+                <p class="text-xs font-bold text-slate-200" id="dub-audio-source-title">Audio Source: Active Riff (Take 1)</p>
+                <p class="text-[10px] text-slate-400 mt-0.5" id="dub-audio-source-detail">Key of Am • 110 BPM • 3-Tier Multi-Track Mixdown</p>
+              </div>
+            </div>
+            <span class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">Ready to Remux</span>
+          </div>
+        </div>
+
+        <!-- PROGRESS BAR -->
+        <div id="dub-progress" class="hidden bg-indigo-950/40 border border-indigo-800/60 rounded-xl p-4 text-center">
+          <div class="inline-block animate-spin text-xl mb-2">⚡</div>
+          <p class="text-xs font-semibold text-indigo-300">Stripping phone mic &amp; stream-copying audio track…</p>
+          <p class="text-[11px] text-indigo-400/80 mt-0.5">Running headless FFmpeg remux (-c:v copy -an)</p>
+        </div>
+
+        <!-- RESULT PREVIEW CONTAINER -->
+        <div id="dub-result-container" class="hidden border border-emerald-800/60 bg-emerald-950/20 rounded-xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+              <span>✅ Remux Complete</span>
+              <span id="dub-perf-badge" class="text-[10px] bg-emerald-500/20 border border-emerald-500/40 px-1.5 py-0.2 rounded font-mono">0.8s</span>
+            </span>
+            <span id="dub-result-mode" class="text-[10px] text-slate-400 font-mono">ffmpeg_stream_copy</span>
+          </div>
+          <!-- HTML5 Video Player -->
+          <video id="dub-result-video" controls class="w-full rounded-lg max-h-56 bg-black border border-slate-800"></video>
+          <div class="flex items-center justify-between pt-1">
+            <span id="dub-result-filesize" class="text-xs text-slate-400">Size: 14.2 MB</span>
+            <a id="dub-download-btn" href="#" download="dubbed_riff.mp4" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-lg shadow-md transition flex items-center gap-1.5">
+              <span>📥 Download Dubbed Video</span>
+            </a>
+          </div>
+        </div>
+
+        <p id="dub-action-error" class="hidden text-xs text-rose-400 font-medium"></p>
+      </div>
+
+      <footer class="mt-6 flex items-center justify-end gap-3 border-t border-slate-800 pt-3">
+        <button id="btn-cancel-dubbing" type="button" class="rounded-lg px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-100">Cancel</button>
+        <button id="btn-execute-dub" type="button" class="rounded-lg bg-indigo-600 px-5 py-2 text-xs font-bold text-white hover:bg-indigo-500 disabled:opacity-40 transition shadow-lg shadow-indigo-600/30 flex items-center gap-2 cursor-pointer">
+          <span>🎬 Dub Riff onto Video</span>
+        </button>
       </footer>
     </div>
   </div>
@@ -1175,6 +1284,10 @@ E|---------------------------------------------------------5-3-0----|
         try { window.speechSynthesis.cancel(); } catch (_) {}
       }
       isPlaying = false;
+      document.querySelectorAll('.staff-bar-highlight').forEach(rect => {
+        rect.setAttribute('fill', 'transparent');
+        rect.setAttribute('stroke', 'transparent');
+      });
       const playBtn = document.getElementById('btn-play-pause');
       if (playBtn) playBtn.innerText = '▶';
     }
@@ -1273,6 +1386,18 @@ E|---------------------------------------------------------5-3-0----|
             }
           });
 
+          // Grand staff playhead highlight sync (PRD Section 3.5)
+          document.querySelectorAll('.staff-bar-highlight').forEach(rect => {
+            const b = Number(rect.dataset.bar);
+            if (b === barNum) {
+              rect.setAttribute('fill', 'rgba(245, 158, 11, 0.22)');
+              rect.setAttribute('stroke', '#f59e0b');
+            } else {
+              rect.setAttribute('fill', 'transparent');
+              rect.setAttribute('stroke', 'transparent');
+            }
+          });
+
           if (state.vocalSpeechEnabled && 'speechSynthesis' in window) {
             const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
             const lyrics = activeTake && activeTake.payload && activeTake.payload.lyrics;
@@ -1362,6 +1487,211 @@ E|---------------------------------------------------------5-3-0----|
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    }
+
+    async function exportDawStems() {
+      const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
+      if (!activeTake || !activeTake.payload) return;
+      const btn = $('btn-export-stems');
+      const originalHtml = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Packaging Stems ZIP…</span>';
+      }
+      try {
+        const chords = activeTake.payload.chords || ['Am', 'F', 'C', 'G'];
+        const progression = chords.join(' - ');
+        const key = activeTake.payload.key || state.key || 'Am';
+        const tempo_bpm = state.bpm || 110;
+        const instruments = activeInstruments(state);
+        const groove = state.groove || 'straight';
+
+        const res = await fetch('/api/v1/tools/render-riff-to-audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            progression,
+            key,
+            tempo_bpm,
+            instruments: instruments.length ? instruments : undefined,
+            groove,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'Symbolic package export failed.');
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const keySlug = key.replace(/\s+/g, '_');
+        a.download = `riff_${keySlug}_${tempo_bpm}bpm_symbolic.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('Error exporting DAW stems: ' + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+        }
+      }
+    }
+
+    // Multi-Format Notation: 5-Line Grand Staff Visualizer (PRD Section 3.5)
+    const CHORD_STAFF_MAP = {
+      'Am':  { treble: [ { pitch: 'A4', y: 60 }, { pitch: 'C5', y: 50 }, { pitch: 'E5', y: 40 } ], bass: { pitch: 'A2', y: 150 } },
+      'A':   { treble: [ { pitch: 'A4', y: 60 }, { pitch: 'C#5', y: 50 }, { pitch: 'E5', y: 40 } ], bass: { pitch: 'A2', y: 150 } },
+      'F':   { treble: [ { pitch: 'F4', y: 70 }, { pitch: 'A4', y: 60 }, { pitch: 'C5', y: 50 } ], bass: { pitch: 'F2', y: 160 } },
+      'Fm':  { treble: [ { pitch: 'F4', y: 70 }, { pitch: 'Ab4', y: 60 }, { pitch: 'C5', y: 50 } ], bass: { pitch: 'F2', y: 160 } },
+      'C':   { treble: [ { pitch: 'E4', y: 75 }, { pitch: 'G4', y: 65 }, { pitch: 'C5', y: 50 } ], bass: { pitch: 'C3', y: 140 } },
+      'Cm':  { treble: [ { pitch: 'Eb4', y: 75 }, { pitch: 'G4', y: 65 }, { pitch: 'C5', y: 50 } ], bass: { pitch: 'C3', y: 140 } },
+      'G':   { treble: [ { pitch: 'G4', y: 65 }, { pitch: 'B4', y: 55 }, { pitch: 'D5', y: 45 } ], bass: { pitch: 'G2', y: 155 } },
+      'Gm':  { treble: [ { pitch: 'G4', y: 65 }, { pitch: 'Bb4', y: 55 }, { pitch: 'D5', y: 45 } ], bass: { pitch: 'G2', y: 155 } },
+      'Dm':  { treble: [ { pitch: 'D4', y: 80 }, { pitch: 'F4', y: 70 }, { pitch: 'A4', y: 60 } ], bass: { pitch: 'D3', y: 135 } },
+      'D':   { treble: [ { pitch: 'D4', y: 80 }, { pitch: 'F#4', y: 70 }, { pitch: 'A4', y: 60 } ], bass: { pitch: 'D3', y: 135 } },
+      'Em':  { treble: [ { pitch: 'E4', y: 75 }, { pitch: 'G4', y: 65 }, { pitch: 'B4', y: 55 } ], bass: { pitch: 'E3', y: 130 } },
+      'E':   { treble: [ { pitch: 'E4', y: 75 }, { pitch: 'G#4', y: 65 }, { pitch: 'B4', y: 55 } ], bass: { pitch: 'E3', y: 130 } },
+      'Bm':  { treble: [ { pitch: 'D4', y: 80 }, { pitch: 'F#4', y: 70 }, { pitch: 'B4', y: 55 } ], bass: { pitch: 'B2', y: 145 } },
+      'B':   { treble: [ { pitch: 'D#4', y: 80 }, { pitch: 'F#4', y: 70 }, { pitch: 'B4', y: 55 } ], bass: { pitch: 'B2', y: 145 } },
+      'Bb':  { treble: [ { pitch: 'F4', y: 70 }, { pitch: 'Bb4', y: 60 }, { pitch: 'D5', y: 45 } ], bass: { pitch: 'Bb2', y: 145 } },
+      'Eb':  { treble: [ { pitch: 'Eb4', y: 75 }, { pitch: 'G4', y: 65 }, { pitch: 'Bb4', y: 60 } ], bass: { pitch: 'Eb3', y: 130 } },
+      'Ab':  { treble: [ { pitch: 'Eb4', y: 75 }, { pitch: 'Ab4', y: 60 }, { pitch: 'C5', y: 50 } ], bass: { pitch: 'Ab2', y: 150 } },
+      'Db':  { treble: [ { pitch: 'F4', y: 70 }, { pitch: 'Ab4', y: 60 }, { pitch: 'Db5', y: 45 } ], bass: { pitch: 'Db3', y: 140 } },
+    };
+
+    function getChordStaffNotes(chordName) {
+      if (!chordName) return CHORD_STAFF_MAP['Am'];
+      const clean = chordName.trim();
+      if (CHORD_STAFF_MAP[clean]) return CHORD_STAFF_MAP[clean];
+      const rootMatch = clean.match(/^([A-G][b#]?)(.*)/);
+      if (rootMatch) {
+        const root = rootMatch[1];
+        const suffix = rootMatch[2] || '';
+        const isMinor = suffix.includes('m') && !suffix.includes('maj');
+        const keyAttempt = isMinor ? (root + 'm') : root;
+        if (CHORD_STAFF_MAP[keyAttempt]) return CHORD_STAFF_MAP[keyAttempt];
+        if (CHORD_STAFF_MAP[root]) return CHORD_STAFF_MAP[root];
+      }
+      return CHORD_STAFF_MAP['Am'];
+    }
+
+    function renderStaffSheet(activeTake, currentBar) {
+      const container = $('staff-sheet-svg-container');
+      if (!container) return;
+      const take = activeTake || (state.takes.find(t => t.id === state.currentTake) || state.takes[0]);
+      const payload = (take && take.payload) || {};
+      const key = payload.key || state.key || 'Am';
+      if ($('staff-key-badge')) $('staff-key-badge').innerText = `Key: ${key}`;
+
+      let barList = [];
+      if (payload.score && payload.score.bars && payload.score.bars.length) {
+        barList = payload.score.bars;
+      } else if (payload.chords && payload.chords.length) {
+        for (let i = 0; i < 8; i++) {
+          const chord = payload.chords[i % payload.chords.length];
+          barList.push({ bar: i + 1, chord });
+        }
+      } else {
+        const defaultChords = ['Am', 'Am', 'F', 'F', 'C', 'C', 'G', 'G'];
+        barList = defaultChords.map((chord, i) => ({ bar: i + 1, chord }));
+      }
+
+      const numBars = Math.min(8, barList.length);
+      const totalWidth = 820;
+      const totalHeight = 190;
+      const staffStart = 35;
+      const staffEnd = totalWidth - 15;
+      const measureStart = 100;
+      const measureWidth = (staffEnd - measureStart) / numBars;
+
+      let svg = `<svg viewBox="0 0 ${totalWidth} ${totalHeight}" class="w-full select-none" style="min-width: 680px;" xmlns="http://www.w3.org/2000/svg">`;
+
+      // Staff lines - Treble (5 lines: 35, 45, 55, 65, 75)
+      [35, 45, 55, 65, 75].forEach(y => {
+        svg += `<line x1="${staffStart}" y1="${y}" x2="${staffEnd}" y2="${y}" stroke="#334155" stroke-width="1.2"/>`;
+      });
+
+      // Staff lines - Bass (5 lines: 115, 125, 135, 145, 155)
+      [115, 125, 135, 145, 155].forEach(y => {
+        svg += `<line x1="${staffStart}" y1="${y}" x2="${staffEnd}" y2="${y}" stroke="#334155" stroke-width="1.2"/>`;
+      });
+
+      // Left bar & bracket connecting staves
+      svg += `<line x1="${staffStart}" y1="35" x2="${staffStart}" y2="155" stroke="#64748b" stroke-width="2.5"/>`;
+      svg += `<path d="M ${staffStart - 2} 35 C ${staffStart - 12} 35, ${staffStart - 18} 75, ${staffStart - 18} 95 C ${staffStart - 18} 115, ${staffStart - 12} 155, ${staffStart - 2} 155" fill="none" stroke="#64748b" stroke-width="2.5"/>`;
+
+      // Clef symbols
+      svg += `<text x="44" y="70" font-size="44" fill="#94a3b8" font-family="serif" style="user-select:none;">𝄞</text>`;
+      svg += `<text x="44" y="146" font-size="34" fill="#94a3b8" font-family="serif" style="user-select:none;">𝄢</text>`;
+
+      // Time signature 4/4
+      svg += `<text x="84" y="54" font-size="18" font-weight="900" fill="#94a3b8" text-anchor="middle" font-family="monospace">4</text>`;
+      svg += `<text x="84" y="72" font-size="18" font-weight="900" fill="#94a3b8" text-anchor="middle" font-family="monospace">4</text>`;
+      svg += `<text x="84" y="134" font-size="18" font-weight="900" fill="#94a3b8" text-anchor="middle" font-family="monospace">4</text>`;
+      svg += `<text x="84" y="152" font-size="18" font-weight="900" fill="#94a3b8" text-anchor="middle" font-family="monospace">4</text>`;
+
+      // Render each bar
+      for (let i = 0; i < numBars; i++) {
+        const barItem = barList[i];
+        const barNumber = i + 1;
+        const chord = barItem.chord || 'Am';
+        const notes = getChordStaffNotes(chord);
+        const xStart = measureStart + i * measureWidth;
+        const xMid = xStart + measureWidth / 2;
+        const xEnd = xStart + measureWidth;
+        const isCurrent = currentBar === barNumber;
+
+        // Measure highlight rect
+        svg += `<rect class="staff-bar-highlight" data-bar="${barNumber}" x="${xStart}" y="8" width="${measureWidth}" height="174" rx="4" fill="${isCurrent ? 'rgba(245, 158, 11, 0.22)' : 'transparent'}" stroke="${isCurrent ? '#f59e0b' : 'transparent'}" stroke-width="1.5" />`;
+
+        // Bar label & Chord symbol
+        svg += `<text x="${xMid}" y="18" font-size="10" font-weight="bold" fill="#64748b" text-anchor="middle" font-family="monospace">BAR ${barNumber}</text>`;
+        svg += `<text x="${xMid}" y="30" font-size="12" font-weight="900" fill="#f59e0b" text-anchor="middle" font-family="sans-serif">${chord}</text>`;
+
+        // Measure boundary lines
+        if (i < numBars - 1) {
+          svg += `<line x1="${xEnd}" y1="35" x2="${xEnd}" y2="75" stroke="#334155" stroke-width="1.2"/>`;
+          svg += `<line x1="${xEnd}" y1="115" x2="${xEnd}" y2="155" stroke="#334155" stroke-width="1.2"/>`;
+        } else {
+          // Double bar at end
+          svg += `<line x1="${xEnd - 4}" y1="35" x2="${xEnd - 4}" y2="75" stroke="#475569" stroke-width="1.5"/>`;
+          svg += `<line x1="${xEnd}" y1="35" x2="${xEnd}" y2="75" stroke="#475569" stroke-width="3"/>`;
+          svg += `<line x1="${xEnd - 4}" y1="115" x2="${xEnd - 4}" y2="155" stroke="#475569" stroke-width="1.5"/>`;
+          svg += `<line x1="${xEnd}" y1="115" x2="${xEnd}" y2="155" stroke="#475569" stroke-width="3"/>`;
+        }
+
+        // Treble triad notes
+        const trebleNotes = notes.treble || [];
+        if (trebleNotes.length) {
+          const minY = Math.min(...trebleNotes.map(n => n.y));
+          const maxY = Math.max(...trebleNotes.map(n => n.y));
+
+          trebleNotes.forEach(note => {
+            if (note.y >= 90) {
+              svg += `<line x1="${xMid - 8}" y1="95" x2="${xMid + 8}" y2="95" stroke="#64748b" stroke-width="1.2"/>`;
+            }
+            svg += `<ellipse cx="${xMid}" cy="${note.y}" rx="4.5" ry="3.2" transform="rotate(-20, ${xMid}, ${note.y})" fill="#fbbf24"/>`;
+          });
+          svg += `<line x1="${xMid + 4}" y1="${maxY}" x2="${xMid + 4}" y2="${minY - 22}" stroke="#fbbf24" stroke-width="1.5"/>`;
+        }
+
+        // Bass root note
+        if (notes.bass) {
+          const bassY = notes.bass.y;
+          if (bassY > 155) {
+            svg += `<line x1="${xMid - 8}" y1="165" x2="${xMid + 8}" y2="165" stroke="#64748b" stroke-width="1.2"/>`;
+          }
+          svg += `<ellipse cx="${xMid}" cy="${bassY}" rx="4.5" ry="3.2" transform="rotate(-20, ${xMid}, ${bassY})" fill="#34d399"/>`;
+          svg += `<line x1="${xMid + 4}" y1="${bassY}" x2="${xMid + 4}" y2="${bassY - 22}" stroke="#34d399" stroke-width="1.5"/>`;
+        }
+      }
+
+      svg += `</svg>`;
+      container.innerHTML = svg;
     }
 
     // =====================================================================
@@ -1596,6 +1926,8 @@ E|---------------------------------------------------------5-3-0----|
           `;
         }
       }
+
+      renderStaffSheet(activeTake);
     }
 
     // =====================================================================
@@ -1691,6 +2023,10 @@ E|---------------------------------------------------------5-3-0----|
         $('view-tab').classList.toggle('hidden', view !== 'tab');
         $('view-sheet').classList.toggle('hidden', view !== 'sheet');
         if ($('view-lyrics')) $('view-lyrics').classList.toggle('hidden', view !== 'lyrics');
+        if (view === 'sheet') {
+          const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
+          renderStaffSheet(activeTake);
+        }
       });
     });
 
@@ -2209,6 +2545,262 @@ E|---------------------------------------------------------5-3-0----|
         dispatch({ type: 'SET_GROOVE', groove: e.target.value });
       });
     }
+
+    // DAW Stems Export Listener (PRD Section 3.7 & 5)
+    const exportStemsBtn = $('btn-export-stems');
+    if (exportStemsBtn) {
+      exportStemsBtn.addEventListener('click', exportDawStems);
+    }
+
+    // =====================================================================
+    // HEADLESS VIDEO DUBBING WORKSPACE (PRD Section 3.7 & 5)
+    // =====================================================================
+    let selectedVideoFile = null;
+    let selectedVideoArrayBuffer = null;
+
+    function uint8ToBase64(u8) {
+      let binary = '';
+      const chunk = 16384;
+      for (let i = 0; i < u8.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    }
+
+    function arrayBufferToBase64(buffer) {
+      return uint8ToBase64(new Uint8Array(buffer));
+    }
+
+    function openDubbingModal() {
+      const dubModal = $('dubbing-modal');
+      if (!dubModal) return;
+      dubModal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+
+      // Update Audio Source Summary to match active take
+      const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
+      const key = (activeTake && activeTake.payload && activeTake.payload.key) || state.key || 'Am';
+      const insts = activeInstruments(state);
+      const instCount = insts.length || 3;
+      if ($('dub-audio-source-title')) {
+        $('dub-audio-source-title').innerText = `Audio Source: Active Riff (Take ${state.currentTake})`;
+      }
+      if ($('dub-audio-source-detail')) {
+        $('dub-audio-source-detail').innerText = `Key of ${key} • ${state.bpm} BPM • ${instCount}-Tier Multi-Track Mixdown`;
+      }
+    }
+
+    function closeDubbingModal() {
+      const dubModal = $('dubbing-modal');
+      if (!dubModal) return;
+      dubModal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    function handleVideoFileSelect(file) {
+      const errEl = $('dub-file-error');
+      if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
+      if (!file) return;
+
+      const MAX_SIZE = 50 * 1024 * 1024;
+      if (file.size > MAX_SIZE) {
+        if (errEl) {
+          errEl.textContent = "File exceeds 50MB limit. Please upload an MP4 or MOV under 50MB.";
+          errEl.classList.remove('hidden');
+        }
+        return;
+      }
+      const ext = '.' + file.name.split('.').pop().toLowerCase();
+      if (ext !== '.mp4' && ext !== '.mov') {
+        if (errEl) {
+          errEl.textContent = "Unsupported video format. Allowed formats: .mp4, .mov";
+          errEl.classList.remove('hidden');
+        }
+        return;
+      }
+
+      selectedVideoFile = file;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        selectedVideoArrayBuffer = e.target.result;
+      };
+      reader.readAsArrayBuffer(file);
+
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      if ($('dub-file-name')) $('dub-file-name').innerText = file.name;
+      if ($('dub-file-meta')) $('dub-file-meta').innerText = `${sizeMb} MB • ${ext.toUpperCase().replace('.', '')}`;
+      if ($('dub-dropzone-prompt')) $('dub-dropzone-prompt').classList.add('hidden');
+      if ($('dub-file-info')) $('dub-file-info').classList.remove('hidden');
+      if ($('dub-action-error')) $('dub-action-error').classList.add('hidden');
+    }
+
+    function resetVideoFile() {
+      selectedVideoFile = null;
+      selectedVideoArrayBuffer = null;
+      const fileInput = $('dub-file-input');
+      if (fileInput) fileInput.value = '';
+      if ($('dub-dropzone-prompt')) $('dub-dropzone-prompt').classList.remove('hidden');
+      if ($('dub-file-info')) $('dub-file-info').classList.add('hidden');
+      if ($('dub-file-error')) $('dub-file-error').classList.add('hidden');
+      if ($('dub-result-container')) $('dub-result-container').classList.add('hidden');
+      const videoEl = $('dub-result-video');
+      if (videoEl) { videoEl.pause(); videoEl.src = ''; }
+    }
+
+    async function executeVideoDub() {
+      const actionErr = $('dub-action-error');
+      if (actionErr) { actionErr.textContent = ''; actionErr.classList.add('hidden'); }
+
+      if (!selectedVideoFile || !selectedVideoArrayBuffer) {
+        if (actionErr) {
+          actionErr.textContent = "Please select or drop an MP4 or MOV video file first.";
+          actionErr.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
+      if (!activeTake || !activeTake.payload || !activeTake.payload.score) {
+        if (actionErr) {
+          actionErr.textContent = "No active riff score found to dub onto video.";
+          actionErr.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const btnExec = $('btn-execute-dub');
+      const progressEl = $('dub-progress');
+      const resultContainer = $('dub-result-container');
+
+      if (btnExec) btnExec.disabled = true;
+      if (progressEl) progressEl.classList.remove('hidden');
+      if (resultContainer) resultContainer.classList.add('hidden');
+
+      const tStart = performance.now();
+
+      try {
+        // 1. Synthesize audio mixdown from active riff
+        const loop = RiffsAudio.renderLoop(activeTake.payload.score, state.bpm, 44100);
+        const mix = RiffsAudio.mixdown(loop, state.muteTiers, 2);
+        const wavBytes = RiffsAudio.encodeWav(mix);
+        const audioBase64 = uint8ToBase64(wavBytes);
+        const videoBase64 = arrayBufferToBase64(selectedVideoArrayBuffer);
+
+        // 2. Call backend remux endpoint
+        const res = await fetch('/api/v1/tools/attach-riff-to-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            video_base64: videoBase64,
+            audio_base64: audioBase64,
+            video_filename: selectedVideoFile.name,
+            audio_filename: 'riff.wav',
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || data.status !== 'success') {
+          throw new Error(data.detail || data.error || 'Video remuxing failed.');
+        }
+
+        const elapsedSec = ((performance.now() - tStart) / 1000).toFixed(2);
+
+        // 3. Populate result view
+        if (resultContainer) {
+          resultContainer.classList.remove('hidden');
+          const videoEl = $('dub-result-video');
+          const downloadBtn = $('dub-download-btn');
+          const perfBadge = $('dub-perf-badge');
+          const modeEl = $('dub-result-mode');
+          const sizeEl = $('dub-result-filesize');
+
+          if (perfBadge) perfBadge.innerText = `${elapsedSec}s`;
+          if (modeEl) modeEl.innerText = data.remux_mode || 'ffmpeg_stream_copy';
+          const sizeMb = (data.size_bytes / (1024 * 1024)).toFixed(1);
+          if (sizeEl) sizeEl.innerText = `Size: ${sizeMb} MB`;
+
+          const videoDataUri = `data:video/mp4;base64,${data.video_base64}`;
+          if (videoEl) {
+            videoEl.src = videoDataUri;
+            videoEl.load();
+          }
+          if (downloadBtn) {
+            downloadBtn.href = videoDataUri;
+            downloadBtn.download = data.filename || 'dubbed_riff.mp4';
+          }
+        }
+      } catch (err) {
+        if (actionErr) {
+          actionErr.textContent = err.message || 'An error occurred during video dubbing.';
+          actionErr.classList.remove('hidden');
+        }
+      } finally {
+        if (btnExec) btnExec.disabled = false;
+        if (progressEl) progressEl.classList.add('hidden');
+      }
+    }
+
+    // Dubbing Modal Triggers & Dropzone wiring
+    const navDubbingBtn = $('nav-dubbing-link');
+    if (navDubbingBtn) navDubbingBtn.addEventListener('click', openDubbingModal);
+
+    const btnCloseDub = $('btn-close-dubbing');
+    if (btnCloseDub) btnCloseDub.addEventListener('click', closeDubbingModal);
+
+    const btnCancelDub = $('btn-cancel-dubbing');
+    if (btnCancelDub) btnCancelDub.addEventListener('click', closeDubbingModal);
+
+    const dubBackdrop = $('dubbing-modal-backdrop');
+    if (dubBackdrop) dubBackdrop.addEventListener('click', closeDubbingModal);
+
+    const dubDropzone = $('dub-dropzone');
+    const dubFileInput = $('dub-file-input');
+    if (dubDropzone && dubFileInput) {
+      dubDropzone.addEventListener('click', (e) => {
+        if (e.target.id !== 'btn-remove-video') {
+          dubFileInput.click();
+        }
+      });
+      dubFileInput.addEventListener('change', function () {
+        if (this.files && this.files[0]) {
+          handleVideoFileSelect(this.files[0]);
+        }
+      });
+
+      dubDropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dubDropzone.classList.add('border-indigo-500', 'bg-indigo-950/20');
+      });
+      dubDropzone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dubDropzone.classList.remove('border-indigo-500', 'bg-indigo-950/20');
+      });
+      dubDropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dubDropzone.classList.remove('border-indigo-500', 'bg-indigo-950/20');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleVideoFileSelect(e.dataTransfer.files[0]);
+        }
+      });
+    }
+
+    const btnRemoveVideo = $('btn-remove-video');
+    if (btnRemoveVideo) btnRemoveVideo.addEventListener('click', (e) => {
+      e.stopPropagation();
+      resetVideoFile();
+    });
+
+    const btnExecDub = $('btn-execute-dub');
+    if (btnExecDub) btnExecDub.addEventListener('click', executeVideoDub);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const dubModal = $('dubbing-modal');
+        if (dubModal && !dubModal.classList.contains('hidden')) {
+          closeDubbingModal();
+        }
+      }
+    });
 
     // Initialize View & Transport
     render();
