@@ -343,21 +343,10 @@ def issue_license_certificate(
 def get_vocal_hmac_secret() -> str:
     """Return the configured vocal approval secret or raise a configuration error."""
     secret = os.getenv("RIFFS_VOCAL_SECRET")
-    if secret:
+    if secret and len(secret.encode("utf-8")) >= 32:
         return secret
-    if (
-        os.getenv("RIFFS_ALLOW_SERVERLESS_FALLBACK", "").strip().lower() in {"1", "true", "yes"}
-        or os.getenv("VERCEL_URL")
-        or os.getenv("VERCEL_REGION")
-    ):
-        seed = (
-            os.getenv("VERCEL_GIT_COMMIT_SHA")
-            or os.getenv("VERCEL_URL")
-            or "riffs-serverless-default-vocal-hmac-secret-2026"
-        )
-        return hashlib.sha256(seed.encode("utf-8")).hexdigest()
     raise RuntimeError(
-        "RIFFS_VOCAL_SECRET environment variable is not configured. "
+        "RIFFS_VOCAL_SECRET must be configured with at least 32 bytes. "
         "Vocal approval token signing requires a configured secret."
     )
 
