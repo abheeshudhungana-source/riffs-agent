@@ -125,7 +125,7 @@ class TestPrdCompletion(unittest.TestCase):
             self.assertEqual(chart["key"], "A minor")
             self.assertEqual(len(chart["bars"]), 4)
 
-    def test_vercel_serverless_zero_config_end_to_end(self):
+    def test_vercel_environment_without_secrets_fails_closed(self):
         import os
         vercel_env = {
             "VERCEL": "1",
@@ -141,47 +141,13 @@ class TestPrdCompletion(unittest.TestCase):
         }
         with patch.dict(os.environ, vercel_env, clear=True):
             token_res = self.client.post("/api/auth/token")
-            self.assertEqual(token_res.status_code, 200)
-            access_token = token_res.json()["access_token"]
-            headers = {"Authorization": f"Bearer {access_token}"}
-
-            gen_res = self.client.post(
-                "/api/generate",
-                json={
-                    "prompt": "Warm neo-soul groove",
-                    "key": "Am",
-                    "bpm": 96,
-                    "chords": "Am - F - C - G",
-                    "instruments": ["bass_guitar", "rhythm_guitar", "cymbals"],
-                    "lyrics_prompt": "Walking through midnight rain",
-                },
-                headers=headers,
-            )
-            self.assertEqual(gen_res.status_code, 200)
-            checkpoint_data = gen_res.json()["data"]
-            self.assertEqual(checkpoint_data["status"], "awaiting_vocal_confirmation")
-
-            approve_res = self.client.post(
-                "/api/vocals/approve",
-                json={
-                    "token": checkpoint_data["vocal_confirmation_token"],
-                    "vocal_trace_id": checkpoint_data["vocal_trace_id"],
-                    "prompt": "Warm neo-soul groove",
-                    "key": "Am",
-                    "bpm": 96,
-                    "chords": "Am - F - C - G",
-                    "instruments": ["bass_guitar", "rhythm_guitar", "cymbals"],
-                    "groove": checkpoint_data["groove"],
-                    "lyrics_prompt": "Walking through midnight rain",
-                    "lyrics_language": "en",
-                    "vocal_style": "soulful_lead",
-                    "edited_lyrics": checkpoint_data["lyrics_draft"]["bars"],
-                    "acknowledge_unassessed_rights": True,
-                },
-                headers=headers,
-            )
-            self.assertEqual(approve_res.status_code, 200)
-            self.assertEqual(approve_res.json()["data"]["status"], "success")
+            self.assertEqual(token_res.status_code, 404)
+            self.assertIsNone(__import__("app").verify_token("header.payload.signature"))
+            with self.assertRaises(RuntimeError):
+                __import__("app").issue_jwt_token()
+            from agent import get_vocal_hmac_secret
+            with self.assertRaises(RuntimeError):
+                get_vocal_hmac_secret()
 
 
 if __name__ == "__main__":

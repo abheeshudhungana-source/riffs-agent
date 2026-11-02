@@ -8,7 +8,6 @@ import hmac
 import json
 import math
 import re
-import secrets
 import time
 from pathlib import Path
 from typing import Literal, Optional, List, Dict, Any, Union
@@ -29,47 +28,39 @@ def _decode_jwt_segment(segment: str) -> bytes:
 
 LOCAL_DEMO_ISSUER = "riffs-local-demo"
 LOCAL_DEMO_AUDIENCE = "riffs-local-api"
-_LOCAL_DEMO_JWT_SECRET = secrets.token_urlsafe(48)
-_SERVERLESS_DEMO_JWT_SECRET = hashlib.sha256(
-    (
-        os.getenv("VERCEL_GIT_COMMIT_SHA")
-        or os.getenv("VERCEL_URL")
-        or "riffs-serverless-default-jwt-secret-key-2026"
-    ).encode("utf-8")
-).hexdigest()
+
+
+def _configured_secret(name: str) -> Optional[str]:
+    secret = os.getenv(name)
+    return secret if secret and len(secret.encode("utf-8")) >= 32 else None
 
 
 def _is_deployed_environment() -> bool:
     return bool(
         os.getenv("VERCEL")
         or os.getenv("VERCEL_ENV")
+        or os.getenv("VERCEL_URL")
+        or os.getenv("VERCEL_REGION")
         or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
         or os.getenv("ENVIRONMENT", "").lower() == "production"
     )
 
 
-def _has_serverless_fallback() -> bool:
-    return bool(
-        os.getenv("RIFFS_ALLOW_SERVERLESS_FALLBACK", "").strip().lower() in {"1", "true", "yes"}
-        or os.getenv("VERCEL_URL")
-        or os.getenv("VERCEL_REGION")
-    )
+def _public_demo_enabled() -> bool:
+    enabled = os.getenv("RIFFS_PUBLIC_DEMO", "").strip().lower() in {"1", "true", "yes"}
+    return enabled and _configured_secret("RIFFS_JWT_SECRET") is not None and _configured_secret("RIFFS_VOCAL_SECRET") is not None
 
 
 def _demo_auth_enabled() -> bool:
-    if _has_serverless_fallback():
-        return True
     enabled = os.getenv("RIFFS_ENABLE_DEMO_AUTH", "").strip().lower() in {"1", "true", "yes"}
-    return enabled and not _is_deployed_environment()
+    return (_public_demo_enabled() or (enabled and not _is_deployed_environment())) and _configured_secret("RIFFS_JWT_SECRET") is not None
 
 
 def _jwt_settings() -> tuple[Optional[str], Optional[str], Optional[str]]:
-    secret = os.getenv("RIFFS_JWT_SECRET")
+    secret = _configured_secret("RIFFS_JWT_SECRET")
     issuer = os.getenv("RIFFS_JWT_ISSUER")
     audience = os.getenv("RIFFS_JWT_AUDIENCE")
     if _demo_auth_enabled():
-        fallback_secret = _SERVERLESS_DEMO_JWT_SECRET if _has_serverless_fallback() else _LOCAL_DEMO_JWT_SECRET
-        secret = secret or fallback_secret
         issuer = issuer or LOCAL_DEMO_ISSUER
         audience = audience or LOCAL_DEMO_AUDIENCE
     return secret, issuer, audience
@@ -166,8 +157,11 @@ def increment_generation_count(user: str, now: Optional[float] = None) -> int:
         return int(redis_client.eval(_RATE_LIMIT_SCRIPT, 1, key, RATE_WINDOW_SECONDS))
     except Exception as exc:
         if not os.getenv("REDIS_URL"):
-            if _is_deployed_environment() and not _has_serverless_fallback():
+            if _is_deployed_environment() and not _public_demo_enabled():
                 raise RuntimeError("Shared Redis rate limiting is required in deployed environments") from exc
+            if _is_deployed_environment():
+                # Demo-grade only: per-instance memory limits do not coordinate serverless instances.
+                pass
             prev_window, count = _IN_MEMORY_RATE_LIMITS.get(user_key, (window, 0))
             if prev_window != window:
                 count = 1
