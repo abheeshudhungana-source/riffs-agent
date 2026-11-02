@@ -8,6 +8,7 @@ import hmac
 import json
 import math
 import re
+import secrets
 import time
 from pathlib import Path
 from typing import Literal, Optional, List, Dict, Any, Union
@@ -28,6 +29,7 @@ def _decode_jwt_segment(segment: str) -> bytes:
 
 LOCAL_DEMO_ISSUER = "riffs-local-demo"
 LOCAL_DEMO_AUDIENCE = "riffs-local-api"
+_LOCAL_DEMO_JWT_SECRET = secrets.token_urlsafe(48)
 
 
 def _configured_secret(name: str) -> Optional[str]:
@@ -47,13 +49,12 @@ def _is_deployed_environment() -> bool:
 
 
 def _public_demo_enabled() -> bool:
-    enabled = os.getenv("RIFFS_PUBLIC_DEMO", "").strip().lower() in {"1", "true", "yes"}
-    return enabled and _configured_secret("RIFFS_JWT_SECRET") is not None and _configured_secret("RIFFS_VOCAL_SECRET") is not None
+    return storage.public_demo_enabled()
 
 
 def _demo_auth_enabled() -> bool:
     enabled = os.getenv("RIFFS_ENABLE_DEMO_AUTH", "").strip().lower() in {"1", "true", "yes"}
-    return (_public_demo_enabled() or (enabled and not _is_deployed_environment())) and _configured_secret("RIFFS_JWT_SECRET") is not None
+    return _public_demo_enabled() or (enabled and not _is_deployed_environment())
 
 
 def _jwt_settings() -> tuple[Optional[str], Optional[str], Optional[str]]:
@@ -61,6 +62,8 @@ def _jwt_settings() -> tuple[Optional[str], Optional[str], Optional[str]]:
     issuer = os.getenv("RIFFS_JWT_ISSUER")
     audience = os.getenv("RIFFS_JWT_AUDIENCE")
     if _demo_auth_enabled():
+        if secret is None and not _is_deployed_environment():
+            secret = _LOCAL_DEMO_JWT_SECRET
         issuer = issuer or LOCAL_DEMO_ISSUER
         audience = audience or LOCAL_DEMO_AUDIENCE
     return secret, issuer, audience
@@ -159,9 +162,7 @@ def increment_generation_count(user: str, now: Optional[float] = None) -> int:
         if not os.getenv("REDIS_URL"):
             if _is_deployed_environment() and not _public_demo_enabled():
                 raise RuntimeError("Shared Redis rate limiting is required in deployed environments") from exc
-            if _is_deployed_environment():
-                # Demo-grade only: per-instance memory limits do not coordinate serverless instances.
-                pass
+            # Public demo fallback is demo-grade: per-instance memory limits do not coordinate serverless instances.
             prev_window, count = _IN_MEMORY_RATE_LIMITS.get(user_key, (window, 0))
             if prev_window != window:
                 count = 1

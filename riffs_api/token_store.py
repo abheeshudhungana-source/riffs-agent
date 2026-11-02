@@ -15,6 +15,7 @@ import threading
 import time
 import urllib.request
 from typing import Any, Callable, Optional
+from riffs_api.storage import public_demo_enabled
 
 KEY_PREFIX = "riffs:vocal:token:"
 
@@ -97,13 +98,6 @@ def _is_deployed_environment() -> bool:
     )
 
 
-def _public_demo_enabled() -> bool:
-    enabled = os.getenv("RIFFS_PUBLIC_DEMO", "").strip().lower() in {"1", "true", "yes"}
-    jwt_secret = os.getenv("RIFFS_JWT_SECRET", "")
-    vocal_secret = os.getenv("RIFFS_VOCAL_SECRET", "")
-    return enabled and len(jwt_secret.encode("utf-8")) >= 32 and len(vocal_secret.encode("utf-8")) >= 32
-
-
 def set_token_store(store: Optional[Any]) -> None:
     """Install a store explicitly (tests); pass None to restore environment selection."""
     global _override
@@ -117,13 +111,13 @@ def get_token_store() -> Any:
     token = os.getenv("KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
     if url and token:
         return UpstashRedisTokenStore(url, token)
-    if _is_deployed_environment() and not _public_demo_enabled():
+    if _is_deployed_environment() and not public_demo_enabled():
         raise TokenStoreUnavailable(
             "Vocal approval needs a shared token store in production: set KV_REST_API_URL and "
             "KV_REST_API_TOKEN (Vercel KV / Upstash). In-memory storage cannot prevent replay "
             "across serverless instances."
         )
-    if _is_deployed_environment() and _public_demo_enabled():
+    if _is_deployed_environment() and public_demo_enabled():
         # Demo-grade only: process memory cannot prevent replay across serverless instances.
         return _memory_store
     # Local development and tests may use the process-local store.
