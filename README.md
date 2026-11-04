@@ -1,14 +1,21 @@
 # RIFFs: Autonomous Music Theory & Acoustic Sketching Co-Producer
 
-[![CI / Regression Tests](https://img.shields.io/badge/tests-verification%20pending-yellow)](https://github.com/abheeshudhungana-source/riffs-agent)
+[![CI / Regression Tests](https://github.com/abheeshudhungana-source/riffs-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/abheeshudhungana-source/riffs-agent/actions/workflows/ci.yml)
 [![Live Demo](https://img.shields.io/badge/live%20demo-riffs--agent.vercel.app-blue)](https://riffs-agent.vercel.app)
-[![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-indigo)](https://python.org)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-indigo)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-slate)](LICENSE)
 
 **Repository:** [https://github.com/abheeshudhungana-source/riffs-agent](https://github.com/abheeshudhungana-source/riffs-agent)  
 **Live Production URL:** [https://riffs-agent.vercel.app](https://riffs-agent.vercel.app)  
 **Owners:** Abheeshu Dhungana & Michael Goslin  
-**Milestone:** Final Build Submission  
+**Milestone:** Final Build Submission
+
+## Highlights
+
+- Symbolic scores come first: editable chords, tabs, MIDI and MusicXML.
+- Human approval binds vocal lyrics to a signed, expiring, single-use token.
+- The agent uses a small tool allowlist and checks take ownership.
+- In-browser Web Audio renders instrumental parts and syllable-driven synthetic singing.
 
 ---
 
@@ -30,7 +37,7 @@
 
 2. **Human-in-the-Loop (HITL) Vocal Checkpoint:**
    * The agent halts before voice synthesis and issues a cryptographic, time-limited HMAC token (`awaiting_vocal_confirmation`).
-   * The musician reviews the 4-line verse, optionally edits lines bar-by-bar, and acknowledges rights before authorizing vocal synthesis.
+   * The musician reviews the bar-aligned verse, optionally edits lines bar-by-bar, and acknowledges rights before authorizing vocal synthesis. The generated vocal melody also passes through the configured originality check before it is returned.
    * Approval tokens cryptographically bind the request context, exact lyric text hash, and expiration timestamp to prevent tampering or replay attacks.
 
 3. **Multi-Format Interactive Notation Deck:**
@@ -43,8 +50,8 @@
    * Individual track locks (🔒 / 🔓) allow keeping a favored bassline while regenerating new chords, drums, or vocal leads.
 
 5. **In-Browser Web Audio DSP Looper & Synchronized Voice:**
-   * Zero-dependency client-side physical voice modeling: Karplus-Strong string plucking, resonator guitars, waveguide wind models, and formant-filtered vocal fold synthesis (700Hz, 1350Hz, 2600Hz formant filters).
-   * **Synchronized Lyrics Narration:** Integrates the browser's native Web Speech API to speak/chant the lyric lines in exact synchronization with each chord change as the looper plays.
+   * Zero-dependency client-side physical voice modeling: Karplus-Strong string plucking, resonator guitars, waveguide wind models, and vowel-dependent formant-filtered vocal synthesis.
+   * **Syllable-driven vocals:** Sung mode is the default, with vowel-dependent formants, consonant onsets, pitch glides and vibrato. Spoken mode optionally uses Web Speech at bar boundaries and mutes the sung lane. This is an approximate synthetic voice, not realistic singing or exact speech alignment.
    * Musician practice suite: Hardware-style LED kill switches (Mute Low / Mid / High / Vocal), 4-beat pre-roll count-in, and auto-ramping **Speed Trainer** (+3 BPM per loop).
 
 6. **Automated Melodic Originality & Copyright Guardrails:**
@@ -68,7 +75,7 @@ To prevent architectural scope creep and protect musicians' creative ownership, 
 
 2. **Hyper-Realistic Neural Voice / Artist Cloning:**
    * **Why it's out of scope:** We deliberately avoid proprietary cloud voice-cloning APIs (e.g. ElevenLabs, Suno audio diffusion) to eliminate deepfake voice identity theft, copyright liability, and heavy API latency.
-   * **Enforced Behavior:** Vocal synthesis is performed entirely client-side using deterministic formant filtering (700Hz, 1350Hz, 2600Hz vocal fold acoustics) and browser-native Web Speech API synchronization.
+   * **Enforced Behavior:** The browser preview uses deterministic vowel-dependent formant synthesis. Optional Spoken mode uses browser-native speech and plays separately from the sung lane. Server-side WAV previews use simpler oscillators.
 
 3. **Direct Commercial Song / Artist Plagiarism:**
    * **Why it's out of scope:** Ethical and legal boundaries require that our agent does not reproduce copyrighted commercial melodies or master recordings.
@@ -99,7 +106,7 @@ During peer review and security audits, our testing partner surfaced several cri
 | **1** | **Unbounded Lyrics Prompts Bypassing Safety** | Lyrics prompt could be abused to request full songs or bypass instrumental default boundaries. | Added dual-prompt validation in `validate_prompt()`. Rejects `complete song` / `full song` (`LOOP_LENGTH_LIMIT`) and restricts lyrics generation strictly to a 4-line verse aligned to chord bars. |
 | **2** | **Vocal Approval Token Replay & Forgery** | An issued vocal token could theoretically be reused across takes or with modified lyrics. | Implemented HMAC token payloads binding SHA-256 hashes of context and exact lyrics. Enforced atomic once-only consumption with replay protection and fail-closed validation. |
 | **3** | **Session Ownership & Unneeded Tool Access** | Take reads did not check record ownership, and the allowlist included unused storage, publishing, invite, and remux stubs guarded only by a caller-controlled `approved` flag. | Take records now carry the authenticated subject; API reads and take reuse are owner-scoped. The agent allowlist contains only progression parsing, score drafting, and symbolic export. The video-remux route requires the generation entitlement. |
-| **4** | **Serverless Production Authentication Failures** | Static fallback signing secrets and an unauthenticated token-mint endpoint could grant anyone a beta generation token; in-memory rate limits were not shared across instances. | Static JWT and vocal secrets were removed. `/api/auth/token` only issues an ephemeral local demo token when `RIFFS_ENABLE_DEMO_AUTH=true` and is disabled on deployments. Deployed generation fails closed without configured JWT settings and shared Redis rate limits. Vocal approval requires a configured secret and shared replay store. |
+| **4** | **Serverless Production Authentication Failures** | Static fallback signing secrets and an unauthenticated token-mint endpoint could grant anyone a beta generation token; in-memory rate limits were not shared across instances. | Predictable serverless signing secrets were removed. Local demo tokens use a process-random secret when `RIFFS_ENABLE_DEMO_AUTH=true`. Hosted demo tokens require explicit `RIFFS_PUBLIC_DEMO=1` plus configured JWT and vocal secrets of at least 32 bytes. Deployed generation fails closed without configured JWT settings and shared Redis rate limits. Vocal approval requires a configured secret and shared replay store. |
 | **5** | **Vocal Lead Playback Disconnection** | Approved vocal tracks were synthesized in MIDI and WAV export, but silent in live browser playback. | Wired `loop.tiers.vocal` into `tierGainNodes.vocal` in Web Audio mixer, added vocal mute toggle, and added real-time synchronized Web Speech API narration. |
 
 ### ⚠️ Known Limitations & Architectural Tradeoffs
@@ -107,8 +114,8 @@ During peer review and security audits, our testing partner surfaced several cri
 Being transparent about architectural boundaries is critical for production readiness:
 
 1. **Shared Authentication and Replay Storage:**
-   * **Local Demo Mode:** Set `RIFFS_ENABLE_DEMO_AUTH=true` in a local `.env` to enable the UI's local token helper. It uses a process-random signing secret and cannot mint tokens in Vercel or AWS Lambda.
-   * **Staging and Production:** Configure `RIFFS_JWT_SECRET`, issuer, audience, `REDIS_URL`, `RIFFS_VOCAL_SECRET`, and shared Upstash/Vercel KV credentials. The deployment fails closed when required auth, rate-limit, signing, or replay storage is missing or unavailable. Never use demo auth or local in-memory storage for staging or production validation.
+   * **Local Demo Mode:** Set `RIFFS_ENABLE_DEMO_AUTH=true` in a local `.env` to enable the UI's local token helper. It uses a process-random signing secret locally; hosted token minting requires the separate public-demo opt-in described below.
+   * **Staging and Production:** Configure `RIFFS_JWT_SECRET`, issuer, audience, `REDIS_URL`, `RIFFS_VOCAL_SECRET`, and shared Upstash/Vercel KV credentials. Normal deployments fail closed when required auth, rate-limit, signing, or replay storage is missing or unavailable. Explicit public demo mode permits process-local replay storage and, when `REDIS_URL` is absent, rate-limit fallback; this does not coordinate serverless instances. Never use demo auth or local in-memory storage for staging or production validation.
    * **Staging Status:** A real IdP-issued token and live shared Redis/KV connection still need end-to-end validation in staging.
 
 2. **Client-Side Web Speech API Synchronization vs. Web Audio Synthesis:**
@@ -121,7 +128,7 @@ Being transparent about architectural boundaries is critical for production read
 ## 🛠️ How to Run It
 
 > [!NOTE]
-> **No model-provider key required for core generation:** Instrumental composition uses deterministic music theory and the Web Audio preview. Local API use opts into the local-only demo token helper via `RIFFS_ENABLE_DEMO_AUTH=true`; vocal approval additionally needs a locally generated `RIFFS_VOCAL_SECRET`. Demo token issuance is disabled on deployments. Staging and production require an IdP-issued token plus shared Redis/KV configuration.
+> **No model-provider key required for core generation:** Instrumental composition uses deterministic music theory and the Web Audio preview. Local API use opts into the local-only demo token helper via `RIFFS_ENABLE_DEMO_AUTH=true`; vocal approval additionally needs a locally generated `RIFFS_VOCAL_SECRET`. Hosted demo issuance requires `RIFFS_PUBLIC_DEMO=1` and both configured signing secrets; ordinary deployments disable it. Normal staging and production require an IdP-issued token plus shared Redis/KV configuration.
 > 
 > **Zero Build Steps:** There are no Node.js or `npm` build requirements. The frontend is vanilla HTML/CSS/Web Audio served directly by FastAPI.
 
@@ -135,11 +142,11 @@ Access the live production deployment directly in any modern desktop or mobile b
    git clone https://github.com/abheeshudhungana-source/riffs-agent.git
    cd riffs-agent
    ```
-2. **Create a virtual environment and install dependencies (Python 3.9+):**
+2. **Create a virtual environment and install dependencies (Python 3.10+):**
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
-   pip install -r requirements.txt
+   pip install -r requirements.txt -r requirements-dev.txt
    ```
 3. **Configure local environment variables:**
    ```bash
@@ -155,6 +162,17 @@ Access the live production deployment directly in any modern desktop or mobile b
    uvicorn app:app --reload --port 8000
    ```
    Open `http://localhost:8000` in your browser.
+
+### Deploying to Vercel
+
+Set secrets in the Vercel dashboard, never in `vercel.json`:
+
+- `RIFFS_JWT_SECRET` and `RIFFS_VOCAL_SECRET`: independently generated secrets, each at least 32 bytes.
+- `RIFFS_JWT_ISSUER` and `RIFFS_JWT_AUDIENCE`: values matching your token issuer.
+- `REDIS_URL`: shared generation rate-limit storage.
+- `KV_REST_API_URL` and `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`): shared vocal token replay storage.
+
+Missing configuration fails closed. `RIFFS_ENABLE_DEMO_AUTH` only enables local demo authentication. Optional `RIFFS_PUBLIC_DEMO=1` deliberately enables hosted demo token issuance and process-local storage fallbacks, and only works with both real signing secrets configured. Those fallbacks are demo-grade and do not provide distributed replay protection or rate limits. A deployed JWT must include the required generation entitlement.
 
 ### Option C: Interactive CLI Session Runner
 Run the autonomous loop harness directly from your terminal:
@@ -194,11 +212,15 @@ Follow these 4 steps to test the full agent loop, safety guardrails, and music t
 
 The codebase includes comprehensive unit, integration, DSP, and security regression coverage:
 
-* **Run Full Backend & Security Test Suite:**
+* **Run the complete suite (CI tests Python 3.10, 3.11 and 3.12):**
+  ```bash
+  python -m pytest -q
+  ```
+* **Run Backend & Security Unittests:**
   ```bash
   python -m unittest discover tests
   ```
-* **Run Headless Audio DSP Synthesis Engine Tests (9 tests):**
+* **Run Headless Audio DSP Synthesis Engine Tests (9 tests; uses macOS JavaScriptCore and skips when unavailable):**
   ```bash
   python test_engine.py
   ```
@@ -213,23 +235,33 @@ riffs_agent/
 ├── app.py                       # FastAPI API router, JWT auth gateway, and Vercel serverless entrypoint
 ├── composer.py                  # Symbolic music composition engine (Nashville, Tabs, Chords)
 ├── riff_session.py              # Interactive CLI session harness with soft-delete trash
-├── test_engine.py               # Headless JavaScriptCore audio DSP verification suite
 ├── index.html                   # Interactive frontend, Web Audio synthesizer, and practice UI
 ├── requirements.txt             # Python runtime dependencies
 ├── riffs_api/
+│   ├── audio.py                 # Server-side oscillator WAV preview
+│   ├── exports.py               # MIDI, WAV and DAW exports
+│   ├── score.py                 # Score data and note models
+│   ├── routes.py                # API request and response schemas
+│   ├── prompt_guardrails.py     # Prompt and lyric validation
+│   ├── vocal_approval.py        # Shared vocal approval helpers
+│   ├── __init__.py              # Package entrypoint
 │   ├── agent_loop.py            # Deterministic loop using the allowlisted tools
 │   ├── audit_trace.py           # Structured, redacted operational audit logging
 │   ├── originality.py           # Melodic similarity contour comparison
 │   ├── progression.py           # Chord progression & scale degree parser
-│   ├── prompt_guardrails.py     # Anti-plagiarism, instrumental-only, and loop limit checks
 │   ├── prompt_intent.py         # Natural language prompt extraction
 │   ├── render.py                # Symbolic package renderer (MusicXML, MIDI, JSON)
 │   ├── storage.py               # Shared Redis client for rate limits and replay storage
 │   ├── take_store.py            # Local take archive with authenticated-owner checks
 │   ├── tool_access.py           # Least-privilege allowlist for the three active tools
 │   ├── token_store.py           # Atomic single-use token store for vocal approval
-│   ├── video.py                 # Headless FFmpeg video remuxing with shell sanitization
-│   └── vocal_approval.py        # Cryptographic HMAC token signing & verification
+│   └── video.py                 # Headless FFmpeg video remuxing with shell sanitization
 ├── tests/                       # Backend, security, and regression tests
-└── docs/                        # Complete PRDs, architecture diagrams, and threat models
+├── test_agent_day1.py            # Root agent regressions
+├── test_composer.py              # Root composition regressions
+├── test_model.py                 # Manual provider connection check (requires a key)
+├── test_engine.py                # Optional macOS JavaScriptCore DSP checks
+├── requirements-dev.txt          # pytest
+├── LICENSE                       # MIT license
+└── docs/                        # PRDs, architecture diagrams, and threat models
 ```

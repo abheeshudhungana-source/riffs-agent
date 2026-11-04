@@ -15,7 +15,7 @@ class TestLyricsVocalHITL(unittest.TestCase):
     def setUp(self):
         self.agent = RiffsAgent()
         self.prev_secret = os.environ.get("RIFFS_VOCAL_SECRET")
-        os.environ["RIFFS_VOCAL_SECRET"] = "test-secret-hitl-2026"
+        os.environ["RIFFS_VOCAL_SECRET"] = "test-secret-hitl-2026-at-least-32-bytes"
 
     def tearDown(self):
         if self.prev_secret is None:
