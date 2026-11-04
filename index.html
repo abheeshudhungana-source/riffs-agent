@@ -857,48 +857,57 @@ E|---------------------------------------------------------5-3-0----|
     }
 
     // ---- Singing Voice: Formant-filtered vocal fold synthesizer ----
-    function vocalVoice(freq, nOff, rel, sr, vel, rng) {
-      var len = Math.min(nOff + rel, Math.floor(4.5 * sr));
-      var out = new Float32Array(len);
-      var phase = 0, vibRate = 5.2, vibDepth = 0.007;
-      var glot = 0;
-
-      function makeBp(f0, Q) {
-        var w0 = TWO_PI * f0 / sr, sinW = Math.sin(w0), cosW = Math.cos(w0);
-        var alpha = sinW / (2 * Q);
-        var a0 = 1 + alpha;
-        return {
-          b0: alpha / a0, b2: -alpha / a0,
-          a1: -2 * cosW / a0, a2: (1 - alpha) / a0,
-          x1: 0, x2: 0, y1: 0, y2: 0
-        };
+    var VOWEL_FORMANTS = {
+      a: [800, 1150, 2900], e: [500, 1900, 2600], i: [300, 2200, 3000],
+      o: [500, 800, 2600], u: [350, 650, 2400], neutral: [550, 1500, 2500]
+    };
+    function vocalVoice(freq, nOff, rel, sr, vel, rng, event, previous, next, spb) {
+      event = event || {};
+      spb = spb || 1;
+      var linked = previous && (event.melisma || Math.abs(event.beat - previous.beat - previous.dur) < 0.12);
+      var following = next && (next.melisma || Math.abs(next.beat - event.beat - event.dur) < 0.12);
+      rel = Math.min(rel, Math.floor((following ? 0.035 : 0.09) * sr));
+      var len = Math.min(nOff + rel, Math.floor(6 * sr)), out = new Float32Array(len);
+      var target = VOWEL_FORMANTS[event.vowel] || VOWEL_FORMANTS.neutral;
+      var from = linked ? (VOWEL_FORMANTS[previous.vowel] || VOWEL_FORMANTS.neutral) : target;
+      var startFreq = linked ? mtof(previous.midi) : freq;
+      var onset = event.melisma ? '' : (event.onset || '').toLowerCase();
+      var onsetSamples = onset ? Math.min(Math.floor(0.035 * sr), Math.floor(nOff * 0.3)) : 0;
+      var nasal = /^[mnlr]/.test(onset), noiseLow = 0, phase = 0, glot = 0;
+      var filters = [0, 1, 2].map(function () { return { x1: 0, x2: 0, y1: 0, y2: 0 }; });
+      function tune(bp, f0, q) {
+        var w = TWO_PI * Math.min(f0, sr * 0.45) / sr, alpha = Math.sin(w) / (2 * q), a0 = 1 + alpha;
+        bp.b0 = alpha / a0; bp.b2 = -bp.b0;
+        bp.a1 = -2 * Math.cos(w) / a0; bp.a2 = (1 - alpha) / a0;
       }
-      var bp1 = makeBp(700, 3.5), bp2 = makeBp(1350, 4.0), bp3 = makeBp(2600, 5.0);
-
-      function tickBp(bp, x) {
+      function tick(bp, x) {
         var y = bp.b0 * x + bp.b2 * bp.x2 - bp.a1 * bp.y1 - bp.a2 * bp.y2;
-        bp.x2 = bp.x1; bp.x1 = x;
-        bp.y2 = bp.y1; bp.y1 = y;
+        bp.x2 = bp.x1; bp.x1 = x; bp.y2 = bp.y1; bp.y1 = y;
         return y;
       }
-
-      var att = Math.max(1, Math.floor(0.04 * sr));
+      var attack = Math.max(1, Math.floor((linked ? 0.006 : 0.025) * sr));
       for (var n = 0; n < len; n++) {
-        var t = n / sr;
-        var vib = t > 0.15 ? Math.sin(TWO_PI * vibRate * t) * vibDepth : 0;
-        phase += (freq * (1 + vib)) / sr;
+        var t = n / sr, glide = Math.min(1, t / 0.06);
+        if (n % 64 === 0) filters.forEach(function (bp, i) {
+          tune(bp, from[i] + (target[i] - from[i]) * glide, 3.5 + i * 0.75);
+        });
+        var vib = Math.min(1, Math.max(0, (t - 0.15) / 0.2)) * 0.005 * Math.sin(TWO_PI * 5.4 * t);
+        phase += (startFreq + (freq - startFreq) * glide) * (1 + vib) / sr;
         phase -= Math.floor(phase);
-
-        var p = phase;
-        var pulse = (p < 0.35) ? Math.sin(p / 0.35 * Math.PI) : -0.15 * Math.sin((p - 0.35) / 0.65 * Math.PI);
+        var pulse = phase < 0.35 ? Math.sin(phase / 0.35 * Math.PI) : -0.15 * Math.sin((phase - 0.35) / 0.65 * Math.PI);
         glot += 0.45 * (pulse - glot);
-
-        var fOut = tickBp(bp1, glot) * 1.3 + tickBp(bp2, glot) * 0.9 + tickBp(bp3, glot) * 0.5;
-
-        var env = n < att ? (n / att) : 1.0;
-        if (n >= nOff) env *= Math.max(0, 1 - (n - nOff) / rel);
-
-        out[n] = Math.tanh(fOut * 1.6) * env * (0.6 + 0.4 * (vel / 127));
+        var vowel = tick(filters[0], glot) * 1.3 + tick(filters[1], glot) * 0.9 + tick(filters[2], glot) * 0.5;
+        var consonant = 0, vowelGain = 1;
+        if (n < onsetSamples) {
+          var progress = n / onsetSamples, noise = rng() * 2 - 1;
+          noiseLow += 0.15 * (noise - noiseLow);
+          consonant = (nasal ? Math.sin(TWO_PI * freq * t) * 0.15 : (noise - noiseLow) * 0.18) * Math.sin(Math.PI * progress);
+          vowelGain = progress;
+        }
+        var env = Math.min(1, n / attack);
+        env = env * env * (3 - 2 * env);
+        if (n >= nOff) env *= Math.max(0, 1 - (n - nOff) / Math.max(1, rel));
+        out[n] = Math.tanh((vowel * vowelGain + consonant) * 1.6) * env * (0.6 + 0.4 * vel / 127);
       }
       return out;
     }
@@ -991,9 +1000,9 @@ E|---------------------------------------------------------5-3-0----|
     };
     var PAN = { low: 0, mid: -0.25, high: 0.25, vocal: 0 };
 
-    function voice(inst, midi, durSec, vel, sr, seed) {
+    function voice(inst, midi, durSec, vel, sr, seed, event, previous, next, spb) {
       var rng = makeRng(seed), nOff = Math.max(1, Math.round(durSec * sr)), f = mtof(midi), p;
-      if (inst === 'vocal_lead') return vocalVoice(f, nOff, Math.floor(0.12 * sr), sr, vel, rng);
+      if (inst === 'vocal_lead') return vocalVoice(f, nOff, Math.floor(0.12 * sr), sr, vel, rng, event, previous, next, spb);
       if (inst === 'bass_guitar') return reggaeBassVoice(f, nOff, Math.floor(0.14 * sr), sr, vel, rng);
       if (inst === 'rhythm_guitar') return resonatorGuitarVoice(f, nOff, Math.floor(0.09 * sr), sr, vel, rng);
       if (PLUCK[inst]) {
@@ -1046,9 +1055,9 @@ E|---------------------------------------------------------5-3-0----|
       var tiers = {}, click = new Float32Array(loopSamples + tail);
       score.lanes.forEach(function (lane) {
         var buf = new Float32Array(loopSamples + tail), trim = TRIM[lane.instrument] || 0.5;
-        lane.events.forEach(function (ev) {
+        lane.events.forEach(function (ev, eventIndex) {
           var seed = ((ev.midi * 7919) ^ Math.round(ev.beat * 1000) ^ (lane.instrument.length * 104729)) >>> 0;
-          var v = voice(lane.instrument, ev.midi, ev.dur * spb, ev.vel, sr, seed);
+          var v = voice(lane.instrument, ev.midi, ev.dur * spb, ev.vel, sr, seed, ev, lane.events[eventIndex - 1], lane.events[eventIndex + 1], spb);
           addInto(buf, v, Math.round(ev.beat * spb * sr), trim * Math.pow(ev.vel / 127, 1.2));
         });
         tiers[lane.tier] = buf;
@@ -1125,7 +1134,7 @@ E|---------------------------------------------------------5-3-0----|
       lockedTracks: ['bass'], bpm: 110, baseBpm: 110, groove: 'straight',
       speedTrainerActive: false, loopCount: 0, metronomeActive: true,
       muteTiers: { low: false, mid: false, high: false, vocal: false },
-      vocalSpeechEnabled: true,
+      vocalSpeechEnabled: false,
       ensemble: { low: 'bass_guitar', mid: 'rhythm_guitar', high: 'drum_kit' },
       error: null,
     };
@@ -1256,7 +1265,7 @@ E|---------------------------------------------------------5-3-0----|
 
         ['low', 'mid', 'high', 'vocal'].forEach(t => {
           tierGainNodes[t] = audioCtx.createGain();
-          tierGainNodes[t].gain.value = (state.muteTiers && state.muteTiers[t]) ? 0 : 1;
+          tierGainNodes[t].gain.value = ((state.muteTiers && state.muteTiers[t]) || (t === 'vocal' && state.vocalSpeechEnabled)) ? 0 : 1;
           tierGainNodes[t].connect(masterGainNode);
         });
 
@@ -1398,7 +1407,7 @@ E|---------------------------------------------------------5-3-0----|
             }
           });
 
-          if (state.vocalSpeechEnabled && 'speechSynthesis' in window) {
+          if (state.vocalSpeechEnabled && !state.muteTiers.vocal && 'speechSynthesis' in window) {
             const activeTake = state.takes.find(t => t.id === state.currentTake) || state.takes[0];
             const lyrics = activeTake && activeTake.payload && activeTake.payload.lyrics;
             if (lyrics && lyrics.length) {
@@ -1890,8 +1899,8 @@ E|---------------------------------------------------------5-3-0----|
               </div>
               <div class="flex items-center gap-2">
                 <button id="btn-toggle-speech" type="button" class="text-[10px] px-2.5 py-1 rounded-md border transition cursor-pointer flex items-center gap-1 ${state.vocalSpeechEnabled ? 'border-amber-500 bg-amber-500/20 text-amber-300 font-bold' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200'}">
-                  <span>🗣️ Lyrics Audio Voice:</span>
-                  <span class="underline">${state.vocalSpeechEnabled ? 'Sing/Speak ON' : 'OFF (Melody Synth Only)'}</span>
+                  <span>Vocal mode:</span>
+                  <span class="underline">${state.vocalSpeechEnabled ? 'Spoken' : 'Sung'}</span>
                 </button>
                 <span class="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded">Synced to Chords</span>
               </div>
@@ -1915,6 +1924,10 @@ E|---------------------------------------------------------5-3-0----|
           if (btnToggleSpeech) {
             btnToggleSpeech.addEventListener('click', () => {
               dispatch({ type: 'TOGGLE_VOCAL_SPEECH' });
+              if (tierGainNodes.vocal && audioCtx) {
+                tierGainNodes.vocal.gain.setValueAtTime(
+                  state.vocalSpeechEnabled || state.muteTiers.vocal ? 0 : 1, audioCtx.currentTime);
+              }
               if (!state.vocalSpeechEnabled && 'speechSynthesis' in window) {
                 try { window.speechSynthesis.cancel(); } catch (_) {}
               }
@@ -1988,7 +2001,7 @@ E|---------------------------------------------------------5-3-0----|
         const track = b.dataset.track;
         dispatch({ type: 'TOGGLE_MUTE', tier: track });
         if (tierGainNodes[track] && audioCtx) {
-          tierGainNodes[track].gain.setValueAtTime(state.muteTiers[track] ? 0 : 1, audioCtx.currentTime);
+          tierGainNodes[track].gain.setValueAtTime(state.muteTiers[track] || (track === 'vocal' && state.vocalSpeechEnabled) ? 0 : 1, audioCtx.currentTime);
         }
       });
     });

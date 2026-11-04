@@ -15,6 +15,7 @@ import threading
 import time
 import urllib.request
 from typing import Any, Callable, Optional
+from riffs_api.storage import public_demo_enabled
 
 KEY_PREFIX = "riffs:vocal:token:"
 
@@ -90,16 +91,10 @@ def _is_deployed_environment() -> bool:
     return bool(
         os.getenv("VERCEL")
         or os.getenv("VERCEL_ENV")
-        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
-        or os.getenv("ENVIRONMENT", "").lower() == "production"
-    )
-
-
-def _has_serverless_fallback() -> bool:
-    return bool(
-        os.getenv("RIFFS_ALLOW_SERVERLESS_FALLBACK", "").strip().lower() in {"1", "true", "yes"}
         or os.getenv("VERCEL_URL")
         or os.getenv("VERCEL_REGION")
+        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("ENVIRONMENT", "").lower() == "production"
     )
 
 
@@ -116,11 +111,15 @@ def get_token_store() -> Any:
     token = os.getenv("KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
     if url and token:
         return UpstashRedisTokenStore(url, token)
-    if _is_deployed_environment() and not _has_serverless_fallback():
+    if _is_deployed_environment() and not public_demo_enabled():
         raise TokenStoreUnavailable(
             "Vocal approval needs a shared token store in production: set KV_REST_API_URL and "
             "KV_REST_API_TOKEN (Vercel KV / Upstash). In-memory storage cannot prevent replay "
             "across serverless instances."
         )
+    if _is_deployed_environment() and public_demo_enabled():
+        # Demo-grade only: process memory cannot prevent replay across serverless instances.
+        return _memory_store
+    # Local development and tests may use the process-local store.
     return _memory_store
 
