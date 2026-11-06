@@ -38,6 +38,7 @@ ENV/
 Thumbs.db
 
 # Scratch and outputs
+.helix/output/
 scratch/
 outputs/
 .riffs_takes/
