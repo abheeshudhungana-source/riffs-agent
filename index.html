@@ -9,6 +9,24 @@
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
     body { font-family: 'Plus Jakarta Sans', sans-serif; }
     .mono { font-family: 'JetBrains Mono', monospace; }
+    /* Lyrics approval: the approved cyan / midnight visual direction, scoped to this flow. */
+    #generate-modal > div:last-child { max-height: 94vh; overflow-y: auto; }
+    #vocal-checkpoint-card {
+      border: 1px solid #67e8f9;
+      background: radial-gradient(ellipse at top right, #164e6355, transparent 65%), #081725;
+      box-shadow: 0 0 22px #22d3ee30, inset 0 0 18px #22d3ee12;
+      border-radius: 18px;
+    }
+    #vocal-checkpoint-card .checkpoint-eyebrow { color: #a5f3fc; letter-spacing: .12em; text-transform: uppercase; }
+    #vocal-checkpoint-card h4 { color: #f8fafc; font-size: 1.5rem; font-weight: 800; margin-top: .5rem; }
+    #checkpoint-prompt { white-space: pre-wrap; overflow-wrap: anywhere; }
+    #checkpoint-lyrics-preview { max-height: 14rem; }
+    #btn-approve-vocals { background: #22d3ee; color: #03141c; }
+    #btn-approve-vocals:hover { background: #67e8f9; }
+    #btn-cancel-vocals { border: 1px solid #67e8f9; border-radius: 8px; color: #e2e8f0; }
+    @media (prefers-reduced-motion: reduce) {
+      #generate-modal *, .lyric-bar-card { animation: none !important; transition: none !important; }
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
@@ -477,6 +495,7 @@ E|---------------------------------------------------------5-3-0----|
         <label for="input-lyrics-prompt" class="block text-xs text-slate-400">Song Lyrics Prompt / Story Topic</label>
         <textarea id="input-lyrics-prompt" rows="2" maxlength="300" placeholder="e.g. Late night drive through the city under neon rain, longing for home..."
                   class="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-purple-400 focus:outline-none"></textarea>
+        <p class="mt-1 text-xs text-slate-400">No idea yet? We’ll draft lyrics from your sound.</p>
 
         <div class="mt-3 grid grid-cols-2 gap-3">
           <div>
@@ -527,20 +546,24 @@ E|---------------------------------------------------------5-3-0----|
 
       <!-- HITL VOCAL CONFIRMATION CHECKPOINT CARD -->
       <div id="vocal-checkpoint-card" class="mt-4 hidden rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-            🛡️ Human-in-the-Loop Vocal Checkpoint
-          </span>
-          <span class="text-[10px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded font-mono">4-Line Verse • Vibe-Matched</span>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span class="checkpoint-eyebrow text-xs font-bold">Lyrics checkpoint</span>
+          <span class="text-xs text-cyan-200">Awaiting approval</span>
         </div>
-        <p class="text-xs text-slate-300 mt-1.5">Review and edit the 4-line verse drafted to match the groove and instrumental vibe:</p>
-        
+        <h4>Your words. Your call.</h4>
+        <p class="text-xs text-slate-300 mt-1.5">Review your draft before vocals are created.</p>
+        <div class="mt-3 rounded-lg border border-slate-600 bg-slate-900/70 p-3">
+          <p class="checkpoint-eyebrow text-[10px] font-bold">Lyric prompt</p>
+          <p id="checkpoint-prompt" class="mt-1 text-sm text-slate-100 italic">Your lyric prompt will appear here.</p>
+          <p id="checkpoint-context" class="mt-2 text-xs text-slate-300"></p>
+        </div>
+        <p class="mt-3 text-sm font-bold text-slate-100">Draft lyrics · one line per bar</p>
+
         <div id="checkpoint-lyrics-preview" class="mt-2.5 max-h-36 overflow-y-auto rounded-lg bg-slate-950/80 p-3 text-xs space-y-1.5 font-mono border border-slate-800 text-slate-200">
           <!-- Populated dynamically with bar-by-bar lyrics -->
         </div>
 
-        <label for="checkpoint-lyrics-edit" class="block text-[11px] font-semibold text-slate-400 mt-2.5">Edit 4-Line Verse (exactly 4 lines, one line per bar)</label>
+        <label for="checkpoint-lyrics-edit" class="block text-[11px] font-semibold text-slate-400 mt-2.5">Edit draft lyrics (one line per bar)</label>
         <textarea id="checkpoint-lyrics-edit" rows="4" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400"></textarea>
 
         <div id="checkpoint-rights" class="mt-3 rounded-lg border border-slate-700 bg-slate-950/60 p-2.5 text-[11px] text-slate-300">
@@ -551,7 +574,8 @@ E|---------------------------------------------------------5-3-0----|
           </label>
         </div>
 
-        <div class="mt-3 flex items-center justify-end gap-2">
+        <p class="mt-3 text-xs text-slate-300">Approved text stays bound to this take. No vocals are generated before approval.</p>
+        <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
           <button id="btn-cancel-vocals" type="button" class="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200">Keep Instrumental</button>
           <button id="btn-approve-vocals" type="button" class="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-lg shadow-md transition cursor-pointer">✨ Approve &amp; Synthesize Voice</button>
         </div>
