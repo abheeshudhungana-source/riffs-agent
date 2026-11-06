@@ -741,106 +741,44 @@ def draft_bar_aligned_lyrics(
     api_key: Optional[str] = None,
     model_id: str = "anthropic/claude-sonnet-5-5",
 ) -> Dict[str, Any]:
-    """Draft one lyric line for each chord bar, matching the instrumental vibe."""
-    vibe = detect_instrumental_vibe(instrumental_style, groove, instruments)
-    bar_count = len(chords)
+    """Plan, select and validate a bar-aligned lyric draft for human review."""
+    from riffs_api.lyrics import generate_verse
 
-    if api_key and prompt:
+    vibe = detect_instrumental_vibe(instrumental_style, groove, instruments)
+    pool = VIBE_LYRICS_TEMPLATES.get(vibe, VIBE_LYRICS_TEMPLATES["general"])
+    fallback = pool.get(language, pool["en"])
+
+    def complete(system, data):
+        # Only this adapter knows the model provider. A provider failure uses the
+        # labelled local fallback, with no raw provider response in logs.
         try:
             import litellm
-            vibe_label = instrumental_style or vibe
-            sys_msg = (
-                f"You are a master lyricist and vocal arranger.\n"
-                f"TASK: Write exactly {bar_count} bar-aligned lines of lyrics, one for each chord bar.\n"
-                f"MANDATORY REQUIREMENT: The lyrics of the song MUST match the vibe of the instrumentation.\n"
-                f"- Lyrics Prompt / Topic: {prompt}\n"
-                f"- Instrumental Vibe & Genre: {vibe_label}\n"
-                f"- Groove: {groove}, Tempo: {bpm} BPM, Key: {key}\n"
-                f"- Ensemble: {', '.join(instruments) if instruments else 'band'}\n"
-                f"- Language: {language}\n"
-                f"- Vocal Style: {vocal_style}\n"
-                f"- Chords: {chords}\n"
-                f"Use a coherent verse and rhyme naturally across the {bar_count} lines.\n"
-                "Return pure JSON with schema:\n"
-                '{"bars": [' + ",".join(
-                    f'{{"bar": {i + 1}, "chord": "{chords[i]}", "text": "...", "syllables": 7}}'
-                    for i in range(bar_count)
-                ) + '], "theme": "' + prompt + '", "instrumental_vibe": "' + vibe + '"}'
-            )
-            resp = litellm.completion(
+            response = litellm.completion(
                 model=model_id,
-                messages=[
-                    {"role": "system", "content": sys_msg},
-                    {"role": "user", "content": f"Topic: {prompt}. Instrumental Vibe: {vibe_label}"}
-                ],
+                messages=[{"role": "system", "content": system},
+                          {"role": "user", "content": json.dumps(data, ensure_ascii=False)}],
                 api_key=api_key,
-                max_tokens=600
+                max_tokens=4096,
+                timeout=20,
+                num_retries=0,
             )
-            raw = resp.choices[0].message.content
-            clean = re.sub(r"^```json\s*|\s*```$", "", raw.strip())
-            data = json.loads(clean)
-            if "bars" in data and len(data["bars"]) >= bar_count:
-                bars_out = []
-                for i, b in enumerate(data["bars"][:bar_count]):
-                    b["bar"] = i + 1
-                    b["chord"] = chords[i % len(chords)]
-                    bars_out.append(b)
-                data["bars"] = bars_out
-                data["language"] = language
-                data["vocal_style"] = vocal_style
-                data["instrumental_vibe"] = vibe
-                return data
+            return response.choices[0].message.content
         except Exception:
-            pass
+            return "{}"
 
-    # Deterministic Vibe-Matched Fallback Templates
-    vibe_dict = VIBE_LYRICS_TEMPLATES.get(vibe, VIBE_LYRICS_TEMPLATES["general"])
-    pool = vibe_dict.get(language, vibe_dict.get("en", VIBE_LYRICS_TEMPLATES["general"]["en"]))
-    verse_lines = [pool[i % len(pool)] for i in range(bar_count)]
-
-    cleaned_prompt = (prompt or "").strip()
-    if cleaned_prompt:
-        if language == "en":
-            vibe_connectors = {
-                "reggae": " with that heavy dub sound",
-                "neosoul": " under warm velvet lights",
-                "blues": " where the crying dobro weeps",
-                "lofi": " as the vinyl loops spin",
-                "funk": " stepping to that driving beat",
-                "general": " in the midnight rain",
-            }
-            conn = vibe_connectors.get(vibe, " in the night")
-            if len(cleaned_prompt.split()) <= 6:
-                verse_lines[0] = f"{cleaned_prompt.capitalize()}{conn}"
-            else:
-                verse_lines[0] = cleaned_prompt.capitalize()
-        elif language == "es":
-            verse_lines[0] = f"{cleaned_prompt.capitalize()} en la noche"
-        elif language == "fr":
-            verse_lines[0] = f"{cleaned_prompt.capitalize()} dans la nuit"
-        elif language == "ja":
-            verse_lines[0] = f"{cleaned_prompt} 夜の彼方へ"
-
-    bars = []
-    for i in range(bar_count):
-        chord = chords[i]
-        line = verse_lines[i]
-        syllables = len(re.findall(r"[aeiouy]+", line.lower())) or 7
-        bars.append({
-            "bar": i + 1,
-            "chord": chord,
-            "text": line,
-            "syllables": syllables,
-        })
-
-    return {
-        "bars": bars,
-        "language": language,
-        "vocal_style": vocal_style,
-        "rhyme_scheme": "AABB",
-        "theme": prompt or "Melodic sketch",
-        "instrumental_vibe": vibe,
-    }
+    result = generate_verse(
+        chords=chords, prompt=prompt, bpm=bpm, language=language,
+        vocal_style=vocal_style, vibe=vibe, instrumental_style=instrumental_style,
+        key=key, groove=groove, instruments=instruments or [],
+        fallback_lines=[fallback[i % len(fallback)] for i in range(len(chords))],
+        complete=complete if api_key and prompt else None,
+    )
+    if language not in pool:
+        # Existing templates only cover these languages. Do not claim that the
+        # fallback performed language-specific poetry or pronunciation checks.
+        if result["generation_source"] == "template_fallback":
+            result["fallback_language"] = "en"
+    return result
 
 
 def _generate_vocal_melody_events(
@@ -1216,6 +1154,11 @@ class RiffsAgent:
                 result_data = {
                     "status": "awaiting_vocal_confirmation",
                     "checkpoint": "HUMAN_IN_THE_LOOP_VOCAL_APPROVAL",
+                    "prompt": prompt,
+                    "lyrics_prompt": lyrics_prompt,
+                    "lyrics_language": lyrics_language,
+                    "vocal_style": vocal_style,
+                    "instruments": list(instruments),
                     "key": key,
                     "bpm": bpm,
                     "groove": groove,

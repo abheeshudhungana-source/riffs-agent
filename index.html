@@ -9,6 +9,24 @@
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
     body { font-family: 'Plus Jakarta Sans', sans-serif; }
     .mono { font-family: 'JetBrains Mono', monospace; }
+    /* Lyrics approval: the approved cyan / midnight visual direction, scoped to this flow. */
+    #generate-modal > div:last-child { max-height: 94vh; overflow-y: auto; }
+    #vocal-checkpoint-card {
+      border: 1px solid #67e8f9;
+      background: radial-gradient(ellipse at top right, #164e6355, transparent 65%), #081725;
+      box-shadow: 0 0 22px #22d3ee30, inset 0 0 18px #22d3ee12;
+      border-radius: 18px;
+    }
+    #vocal-checkpoint-card .checkpoint-eyebrow { color: #a5f3fc; letter-spacing: .12em; text-transform: uppercase; }
+    #vocal-checkpoint-card h4 { color: #f8fafc; font-size: 1.5rem; font-weight: 800; margin-top: .5rem; }
+    #checkpoint-prompt { white-space: pre-wrap; overflow-wrap: anywhere; }
+    #checkpoint-lyrics-preview { max-height: 14rem; }
+    #btn-approve-vocals { background: #22d3ee; color: #03141c; }
+    #btn-approve-vocals:hover { background: #67e8f9; }
+    #btn-cancel-vocals { border: 1px solid #67e8f9; border-radius: 8px; color: #e2e8f0; }
+    @media (prefers-reduced-motion: reduce) {
+      #generate-modal *, .lyric-bar-card { animation: none !important; transition: none !important; }
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
@@ -477,6 +495,7 @@ E|---------------------------------------------------------5-3-0----|
         <label for="input-lyrics-prompt" class="block text-xs text-slate-400">Song Lyrics Prompt / Story Topic</label>
         <textarea id="input-lyrics-prompt" rows="2" maxlength="300" placeholder="e.g. Late night drive through the city under neon rain, longing for home..."
                   class="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-purple-400 focus:outline-none"></textarea>
+        <p class="mt-1 text-xs text-slate-400">No idea yet? We’ll draft lyrics from your sound.</p>
 
         <div class="mt-3 grid grid-cols-2 gap-3">
           <div>
@@ -492,10 +511,12 @@ E|---------------------------------------------------------5-3-0----|
             <label for="select-vocal-style" class="text-xs text-slate-500">Vocal Style</label>
             <select id="select-vocal-style" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100 cursor-pointer">
               <option value="soulful_lead" selected>Soulful Lead</option>
-              <option value="smooth_rnb">Smooth R&amp;B</option>
-              <option value="gritty_blues">Gritty Blues</option>
-              <option value="pop_melodic">Pop Melodic</option>
-              <option value="reggae_toaster">Reggae Toaster</option>
+              <option value="rnb_lead">R&amp;B Lead</option>
+              <option value="rock_lead">Rock Lead</option>
+              <option value="pop_lead">Pop Lead</option>
+              <option value="rap_lead">Rap Lead</option>
+              <option value="jazz_lead">Jazz Lead</option>
+              <option value="folk_lead">Folk Lead</option>
             </select>
           </div>
         </div>
@@ -527,20 +548,24 @@ E|---------------------------------------------------------5-3-0----|
 
       <!-- HITL VOCAL CONFIRMATION CHECKPOINT CARD -->
       <div id="vocal-checkpoint-card" class="mt-4 hidden rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-            🛡️ Human-in-the-Loop Vocal Checkpoint
-          </span>
-          <span class="text-[10px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded font-mono">4-Line Verse • Vibe-Matched</span>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span class="checkpoint-eyebrow text-xs font-bold">Lyrics checkpoint</span>
+          <span class="text-xs text-cyan-200">Awaiting approval</span>
         </div>
-        <p class="text-xs text-slate-300 mt-1.5">Review and edit the 4-line verse drafted to match the groove and instrumental vibe:</p>
-        
+        <h4>Your words. Your call.</h4>
+        <p class="text-xs text-slate-300 mt-1.5">Review your draft before vocals are created.</p>
+        <div class="mt-3 rounded-lg border border-slate-600 bg-slate-900/70 p-3">
+          <p class="checkpoint-eyebrow text-[10px] font-bold">Lyric prompt</p>
+          <p id="checkpoint-prompt" class="mt-1 text-sm text-slate-100 italic">Your lyric prompt will appear here.</p>
+          <p id="checkpoint-context" class="mt-2 text-xs text-slate-300"></p>
+        </div>
+        <p class="mt-3 text-sm font-bold text-slate-100">Draft lyrics · one line per bar</p>
+
         <div id="checkpoint-lyrics-preview" class="mt-2.5 max-h-36 overflow-y-auto rounded-lg bg-slate-950/80 p-3 text-xs space-y-1.5 font-mono border border-slate-800 text-slate-200">
           <!-- Populated dynamically with bar-by-bar lyrics -->
         </div>
 
-        <label for="checkpoint-lyrics-edit" class="block text-[11px] font-semibold text-slate-400 mt-2.5">Edit 4-Line Verse (exactly 4 lines, one line per bar)</label>
+        <label for="checkpoint-lyrics-edit" class="block text-[11px] font-semibold text-slate-400 mt-2.5">Edit draft lyrics (one line per bar)</label>
         <textarea id="checkpoint-lyrics-edit" rows="4" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400"></textarea>
 
         <div id="checkpoint-rights" class="mt-3 rounded-lg border border-slate-700 bg-slate-950/60 p-2.5 text-[11px] text-slate-300">
@@ -551,7 +576,8 @@ E|---------------------------------------------------------5-3-0----|
           </label>
         </div>
 
-        <div class="mt-3 flex items-center justify-end gap-2">
+        <p class="mt-3 text-xs text-slate-300">Approved text stays bound to this take. No vocals are generated before approval.</p>
+        <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
           <button id="btn-cancel-vocals" type="button" class="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200">Keep Instrumental</button>
           <button id="btn-approve-vocals" type="button" class="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs rounded-lg shadow-md transition cursor-pointer">✨ Approve &amp; Synthesize Voice</button>
         </div>
@@ -1718,6 +1744,61 @@ E|---------------------------------------------------------5-3-0----|
       if (input) input.setAttribute('aria-invalid', msg ? 'true' : 'false');
     }
 
+    function renderLyrics(payload) {
+      if ($('lyrics-lines-container')) {
+        if (payload.lyrics && payload.lyrics.length) {
+          const langMap = { en: 'English', es: 'Spanish (Español)', fr: 'French (Français)', ja: 'Japanese (日本語)' };
+          const styleName = (payload.vocal_style || 'vocal_lead').replace(/_/g, ' ');
+          const langName = langMap[payload.lyrics_language] || payload.lyrics_language || 'English';
+
+          let lyricsHtml = `
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-amber-400">🎤 Vocal Lead Track</span>
+                <span class="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded capitalize font-medium">${styleName}</span>
+                <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">${langName}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="btn-toggle-speech" type="button" class="text-[10px] px-2.5 py-1 rounded-md border transition cursor-pointer flex items-center gap-1 ${state.vocalSpeechEnabled ? 'border-amber-500 bg-amber-500/20 text-amber-300 font-bold' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200'}">
+                  <span>🗣️ Lyrics Audio Voice:</span>
+                  <span class="underline">${state.vocalSpeechEnabled ? 'Sing/Speak ON' : 'OFF (Melody Synth Only)'}</span>
+                </button>
+                <span class="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded">Synced to Chords</span>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          `;
+          payload.lyrics.forEach(item => {
+            lyricsHtml += `
+              <div class="lyric-bar-card border border-slate-800 bg-slate-900/60 p-3 rounded-xl flex flex-col justify-between transition-all" data-bar="${item.bar}">
+                <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono mb-1.5">
+                  <span class="font-bold text-amber-400">BAR ${item.bar}</span>
+                  <span class="bg-indigo-950 border border-indigo-800 text-indigo-300 px-1.5 py-0.5 rounded text-[10px]">${escapeLyrics(item.chord)}</span>
+                </div>
+                <div class="text-sm font-medium text-slate-100 font-sans tracking-wide">"${escapeLyrics(item.text || item.lyric || '')}"</div>
+              </div>
+            `;
+          });
+          lyricsHtml += '</div>';
+          $('lyrics-lines-container').innerHTML = lyricsHtml;
+          const btnToggleSpeech = $('btn-toggle-speech');
+          if (btnToggleSpeech) {
+            btnToggleSpeech.addEventListener('click', () => {
+              dispatch({ type: 'TOGGLE_VOCAL_SPEECH' });
+              if (!state.vocalSpeechEnabled && 'speechSynthesis' in window) {
+                try { window.speechSynthesis.cancel(); } catch (_) {}
+              }
+            });
+          }
+        } else {
+          $('lyrics-lines-container').innerHTML = `
+            <p class="text-slate-400 italic text-center py-6">No lyrics generated for this take. Open "Shape the Groove" (Suno Dual Prompt) to add lyrics &amp; voice!</p>
+          `;
+        }
+      }
+
+    }
+
     function render() {
       modal.classList.toggle('hidden', !state.modalOpen);
       document.body.classList.toggle('overflow-hidden', state.modalOpen);
@@ -1875,57 +1956,7 @@ E|---------------------------------------------------------5-3-0----|
         `;
       }
 
-      if ($('lyrics-lines-container')) {
-        if (payload.lyrics && payload.lyrics.length) {
-          const langMap = { en: 'English', es: 'Spanish (Español)', fr: 'French (Français)', ja: 'Japanese (日本語)' };
-          const styleName = (payload.vocal_style || 'vocal_lead').replace(/_/g, ' ');
-          const langName = langMap[payload.lyrics_language] || payload.lyrics_language || 'English';
-
-          let lyricsHtml = `
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-              <div class="flex items-center gap-2">
-                <span class="text-xs font-bold text-amber-400">🎤 Vocal Lead Track</span>
-                <span class="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded capitalize font-medium">${styleName}</span>
-                <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">${langName}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <button id="btn-toggle-speech" type="button" class="text-[10px] px-2.5 py-1 rounded-md border transition cursor-pointer flex items-center gap-1 ${state.vocalSpeechEnabled ? 'border-amber-500 bg-amber-500/20 text-amber-300 font-bold' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200'}">
-                  <span>🗣️ Lyrics Audio Voice:</span>
-                  <span class="underline">${state.vocalSpeechEnabled ? 'Sing/Speak ON' : 'OFF (Melody Synth Only)'}</span>
-                </button>
-                <span class="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded">Synced to Chords</span>
-              </div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          `;
-          payload.lyrics.forEach(item => {
-            lyricsHtml += `
-              <div class="lyric-bar-card border border-slate-800 bg-slate-900/60 p-3 rounded-xl flex flex-col justify-between transition-all" data-bar="${item.bar}">
-                <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono mb-1.5">
-                  <span class="font-bold text-amber-400">BAR ${item.bar}</span>
-                  <span class="bg-indigo-950 border border-indigo-800 text-indigo-300 px-1.5 py-0.5 rounded text-[10px]">${item.chord}</span>
-                </div>
-                <div class="text-sm font-medium text-slate-100 font-sans tracking-wide">"${item.text || item.lyric || ''}"</div>
-              </div>
-            `;
-          });
-          lyricsHtml += '</div>';
-          $('lyrics-lines-container').innerHTML = lyricsHtml;
-          const btnToggleSpeech = $('btn-toggle-speech');
-          if (btnToggleSpeech) {
-            btnToggleSpeech.addEventListener('click', () => {
-              dispatch({ type: 'TOGGLE_VOCAL_SPEECH' });
-              if (!state.vocalSpeechEnabled && 'speechSynthesis' in window) {
-                try { window.speechSynthesis.cancel(); } catch (_) {}
-              }
-            });
-          }
-        } else {
-          $('lyrics-lines-container').innerHTML = `
-            <p class="text-slate-400 italic text-center py-6">No lyrics generated for this take. Open "Shape the Groove" (Suno Dual Prompt) to add lyrics &amp; voice!</p>
-          `;
-        }
-      }
+      renderLyrics(payload);
 
       renderStaffSheet(activeTake);
     }
@@ -2036,6 +2067,48 @@ E|---------------------------------------------------------5-3-0----|
     // Modal Opening & Closing
     let lastFocus = null;
     let pendingVocalData = null;
+
+    function escapeLyrics(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[char]));
+    }
+
+    function checkpointRequest(d) {
+      return {
+        prompt: d.prompt,
+        lyrics_prompt: d.lyrics_prompt,
+        lyrics_language: d.lyrics_language,
+        vocal_style: d.vocal_style,
+        key: d.key,
+        bpm: d.bpm,
+        groove: d.groove,
+        chords: d.chords.join(' - '),
+        instruments: [...d.instruments],
+        seed: d.seed,
+      };
+    }
+
+    function showVocalCheckpoint(d) {
+      pendingVocalData = {
+        token: d.vocal_confirmation_token, takeData: d, payload: checkpointRequest(d),
+      };
+      dispatch({ type: 'CLEAR_ERROR' });
+      $('modal-default-footer').classList.add('hidden');
+      $('vocal-checkpoint-card').classList.remove('hidden');
+      $('checkpoint-prompt').textContent = d.lyrics_prompt;
+      $('checkpoint-context').textContent = [d.lyrics_language, d.vocal_style.replace(/_/g, ' '),
+        `${d.bpm} BPM`, d.key].join(' · ');
+      const bars = d.lyrics_draft.bars;
+      $('checkpoint-lyrics-preview').innerHTML = bars.map(bar => `
+        <div class="flex items-center gap-2 py-1 px-2 rounded bg-slate-900 border border-slate-800">
+          <span class="text-amber-400 font-bold text-[10px] w-14">BAR ${bar.bar}</span>
+          <span class="text-indigo-400 text-[10px] font-mono w-16">[${escapeLyrics(bar.chord)}]</span>
+          <span class="text-slate-200 font-sans text-xs">${escapeLyrics(bar.text)}</span>
+        </div>`).join('');
+      $('checkpoint-lyrics-edit').value = bars.map(bar => bar.text).join('\n');
+      renderCheckpointRights(d);
+    }
 
     function renderCheckpointRights(d) {
       const msg = $('checkpoint-rights-msg');
@@ -2269,8 +2342,8 @@ E|---------------------------------------------------------5-3-0----|
         groove: state.groove || 'straight',
       };
 
-      if (lyricsPrompt) {
-        payload.lyrics_prompt = lyricsPrompt;
+      if (lyricsPrompt || !state.lockedTracks.some(lane => ['vocal', 'vocal_lead'].includes(lane))) {
+        payload.lyrics_prompt = lyricsPrompt || promptText;
         payload.lyrics_language = lyricsLang;
         payload.vocal_style = vocalStyle;
       }
@@ -2296,29 +2369,7 @@ E|---------------------------------------------------------5-3-0----|
 
         // HUMAN-IN-THE-LOOP CHECKPOINT: lyrics draft generated, awaiting user authorization for voice synthesis
         if (d.status === 'awaiting_vocal_confirmation') {
-          pendingVocalData = {
-            token: d.vocal_confirmation_token,
-            takeData: d,
-            payload: payload,
-          };
-          dispatch({ type: 'CLEAR_ERROR' });
-          if ($('modal-default-footer')) $('modal-default-footer').classList.add('hidden');
-          if ($('vocal-checkpoint-card')) $('vocal-checkpoint-card').classList.remove('hidden');
-
-          const draft = d.lyrics_draft || {};
-          const bars = draft.bars || [];
-          let previewHtml = '';
-          bars.forEach(b => {
-            previewHtml += `
-              <div class="flex items-center gap-2 py-1 px-2 rounded bg-slate-900 border border-slate-800">
-                <span class="text-amber-400 font-bold text-[10px] w-14">BAR ${b.bar}</span>
-                <span class="text-indigo-400 text-[10px] font-mono w-16">[${b.chord}]</span>
-                <span class="text-slate-200 font-sans text-xs">"${b.text || b.lyric || ''}"</span>
-              </div>`;
-          });
-          if ($('checkpoint-lyrics-preview')) $('checkpoint-lyrics-preview').innerHTML = previewHtml;
-          if ($('checkpoint-lyrics-edit')) $('checkpoint-lyrics-edit').value = bars.map(b => b.text || b.lyric || '').join('\n');
-          renderCheckpointRights(d);
+          showVocalCheckpoint(d);
           return;
         }
 
@@ -2398,8 +2449,8 @@ E|---------------------------------------------------------5-3-0----|
         btnApprove.disabled = true;
         btnApprove.innerHTML = '✨ Synthesizing Vocal Voice…';
 
-        const rawEdited = ($('checkpoint-lyrics-edit') ? $('checkpoint-lyrics-edit').value : '').trim();
-        const editedLines = rawEdited ? rawEdited.split('\n').map(l => l.trim()).filter(Boolean) : [];
+        const rawEdited = ($('checkpoint-lyrics-edit') ? $('checkpoint-lyrics-edit').value : '');
+        const editedLines = rawEdited.split('\n').map(l => l.trim());
         let { token, takeData, payload } = pendingVocalData;
 
         const failApprove = (msg) => {
@@ -2409,7 +2460,10 @@ E|---------------------------------------------------------5-3-0----|
           btnApprove.innerHTML = '✨ Approve &amp; Synthesize Voice';
         };
 
-        if (!editedLines.length) { failApprove('Enter the final verse (one line per bar) before approving.'); return; }
+        const expectedBars = (takeData.lyrics_draft?.bars || []).length;
+        if (editedLines.length !== expectedBars || editedLines.some(line => !line)) {
+          failApprove(`Enter exactly ${expectedBars} nonempty lines, one per bar.`); return;
+        }
         const ackBox = $('checkpoint-ack');
         const needsAck = (takeData.rights_status || 'unassessed') === 'unassessed';
         if (needsAck && !(ackBox && ackBox.checked)) {
@@ -2442,6 +2496,7 @@ E|---------------------------------------------------------5-3-0----|
             }
             token = nd.vocal_confirmation_token;
             takeData = nd;
+            payload = checkpointRequest(nd);
             pendingVocalData = { token, takeData: nd, payload };
             if (nd.rights_status === 'possible_match') {
               renderCheckpointRights(nd);
@@ -2451,18 +2506,9 @@ E|---------------------------------------------------------5-3-0----|
           }
 
           const approvePayload = {
-            token: token,
+            ...checkpointRequest(takeData),
+            token,
             vocal_trace_id: takeData.vocal_trace_id,
-            prompt: payload.prompt || (takeData && takeData.prompt) || 'Accompaniment with lead vocal track',
-            lyrics_prompt: takeData.lyrics_prompt || payload.lyrics_prompt || 'Vocal song sketch',
-            key: takeData.key || payload.key || 'Am',
-            bpm: takeData.bpm || payload.bpm || 110,
-            groove: takeData.groove || payload.groove || 'straight',
-            chords: chordsInput.value.trim() || 'Am - F - C - G',
-            instruments: payload.instruments,
-            seed: takeData.seed,
-            vocal_style: takeData.vocal_style || payload.vocal_style || 'soulful_lead',
-            lyrics_language: takeData.lyrics_language || payload.lyrics_language || 'en',
             edited_lyrics: editedLines,
             acknowledge_unassessed_rights: !!(ackBox && ackBox.checked),
           };

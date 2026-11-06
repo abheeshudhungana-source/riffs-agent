@@ -304,12 +304,8 @@ class TestVocalRegressionEvals(unittest.TestCase):
     # 5. Refusal codes not mislabeled as CHORD_SYNTAX
     # -------------------------------------------------------------------------
     def test_regression_refusal_codes_not_mislabeled_as_chord_syntax(self):
-        """Guardrail refusals must preserve their exact error codes (INSTRUMENTAL_ONLY, LOOP_LENGTH_LIMIT, etc.)."""
+        """Guardrail refusals must preserve their exact error codes (LOOP_LENGTH_LIMIT, etc.)."""
         cases = [
-            (
-                {"prompt": "Write lyrics about summer nights", "chords": "Am - F - C - G"},
-                "INSTRUMENTAL_ONLY",
-            ),
             (
                 {"prompt": "Generate a full 4 minute song with multiple verses", "chords": "Am - F - C - G"},
                 "LOOP_LENGTH_LIMIT",
