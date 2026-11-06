@@ -291,11 +291,11 @@ class TestLyricsVocalHITL(unittest.TestCase):
         with patch("app.verify_token", return_value=claims), patch("app.increment_generation_count", return_value=1):
             response = client.post(
                 "/api/generate",
-                json={"prompt": "Write lyrics about love"},
+                json={"prompt": "Generate a full song with lyrics about love"},
                 headers={"Authorization": "Bearer test-token"},
             )
         self.assertEqual(response.status_code, 422)
-        self.assertEqual(response.json()["code"], "INSTRUMENTAL_ONLY")
+        self.assertEqual(response.json()["code"], "LOOP_LENGTH_LIMIT")
         self.assertIn("alternative", response.json())
 
     def test_generate_rejects_legacy_license_flag(self):

@@ -1154,6 +1154,11 @@ class RiffsAgent:
                 result_data = {
                     "status": "awaiting_vocal_confirmation",
                     "checkpoint": "HUMAN_IN_THE_LOOP_VOCAL_APPROVAL",
+                    "prompt": prompt,
+                    "lyrics_prompt": lyrics_prompt,
+                    "lyrics_language": lyrics_language,
+                    "vocal_style": vocal_style,
+                    "instruments": list(instruments),
                     "key": key,
                     "bpm": bpm,
                     "groove": groove,

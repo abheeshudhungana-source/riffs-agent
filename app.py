@@ -347,6 +347,9 @@ async def generate_riff(req: GenerateRequest, user_id: str = Depends(require_gen
         req.lyrics_prompt
         or req.vocal_approved
         or (req.previous_score and "vocal_lead" in (req.previous_score.get("part_scores") or {}))
+        or (req.previous_score and any(
+            lane.get("instrument") == "vocal_lead" for lane in req.previous_score.get("lanes", [])
+        ))
     )
     unmatched_locks = [
         lock for lock in requested_locks
@@ -422,6 +425,14 @@ async def generate_riff(req: GenerateRequest, user_id: str = Depends(require_gen
                 )
             previous_take = stored_record["take"]
             previous_score = previous_score or previous_take.get("score")
+        # A new take always offers a lyric draft, even without a separate story
+        # prompt. A locked, previously approved vocal retains its existing lane.
+        lyrics_prompt = req.lyrics_prompt
+        if not lyrics_prompt or not lyrics_prompt.strip():
+            retaining_vocal = any(lock.lower() in ("vocal", "vocal_lead") for lock in requested_locks)
+            lyrics_prompt = None if retaining_vocal else (
+                req.prompt.strip() or "An original verse matching the accompaniment"
+            )
         # The client can supply either prior score JSON or a local take storage ID.
         data = RiffsAgent().generate(
             prompt=req.prompt,
@@ -435,9 +446,9 @@ async def generate_riff(req: GenerateRequest, user_id: str = Depends(require_gen
             previous_take=previous_take,
             base_take_id=req.base_take_id,
             groove=req.groove,
-            lyrics_prompt=req.lyrics_prompt,
-            lyrics_language=req.lyrics_language or "en",
-            vocal_style=req.vocal_style or "soulful_lead",
+            lyrics_prompt=lyrics_prompt,
+            lyrics_language=(req.lyrics_language or "en").strip().lower(),
+            vocal_style=(req.vocal_style or "soulful_lead").strip().lower(),
             vocal_approved=bool(req.vocal_approved),
             vocal_approval_token=req.vocal_approval_token,
             edited_lyrics=req.edited_lyrics,
